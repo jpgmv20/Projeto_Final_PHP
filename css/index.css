@@ -1,0 +1,321 @@
+/* styles.css
+   Header estilo Twitter — esquerda e direita nos cantos, pesquisa centralizada
+*/
+
+/* ========== Variáveis ========== */
+:root{
+  --brand-blue: #1da1f2;
+  --brand-blue-dark: #0d95e8;
+  --bg: #f5f8fa;
+  --surface: #ffffff;
+  --muted: #6b7280;
+  --text: #0f1724;
+  --danger: #e0245e;
+  --success: #17bf63;
+  --border: #e6ecf0;
+  --shadow: 0 6px 18px rgba(15,23,36,0.06);
+
+  --gap-xs: 6px;
+  --gap-sm: 10px;
+  --gap: 16px;
+  --gap-lg: 24px;
+
+  --header-height: 64px;
+  --max-width: 1100px;
+
+  --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+  --radius-sm: 8px;
+  --radius: 14px;
+  --radius-lg: 20px;
+
+  --fast: 150ms;
+  --medium: 250ms;
+}
+
+/* Tema escuro (ativado com .theme-dark no body) */
+body.theme-dark {
+  --bg: #0f1724;
+  --surface: #06121a;
+  --muted: #94a3b8;
+  --text: #e6eef6;
+  --border: rgba(255,255,255,0.06);
+  --shadow: 0 6px 18px rgba(0,0,0,0.6);
+}
+
+/* ========== Reset básico & utilidades ========== */
+*,
+*::before,
+*::after { box-sizing: border-box; }
+
+html, body {
+  height: 100%;
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  line-height: 1.35;
+  font-size: 16px;
+}
+
+/* Container padrão */
+.container {
+  max-width: var(--max-width);
+  margin: 0 auto;
+  padding: 0 var(--gap);
+}
+
+/* Acessibilidade */
+.sr-only {
+  position: absolute !important;
+  width: 1px; height: 1px;
+  padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0,0,0,0);
+  white-space: nowrap; border: 0;
+}
+
+/* Links & botões */
+a { color: inherit; text-decoration: none; }
+button { font: inherit; cursor: pointer; border: none; background: none; }
+
+/* Foco acessível */
+:focus {
+  outline: 3px solid rgba(29,161,242,0.18);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+/* Usuário prefere menos animações */
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; animation: none !important; }
+}
+
+/* ========== Header ========== */
+/* Header base */
+.header {
+  height: var(--header-height);
+  background: var(--brand-blue);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: space-between; /* empurra left e right para as extremidades */
+  padding: 0 var(--gap);
+  position: relative; /* referência para centralizar o centro absolute */
+  z-index: 1000;
+}
+
+/* Header fixo (quando usado) */
+.header.header--fixed {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  box-shadow: var(--shadow);
+}
+
+/* Garantir que o container interno controle o layout mas permita o centro absolute */
+.header > .container {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  position: relative; /* referencia para .header__center absolute */
+  padding: 0; /* padding é aplicado no .header (já tem) */
+}
+
+/* Layout do header: esquerda (logo), centro (busca), direita (ícones) */
+.header__left,
+.header__center,
+.header__right {
+  display: flex;
+  align-items: center;
+  gap: var(--gap-sm);
+}
+
+/* Esquerda e direita fixos (não crescem) */
+.header__left,
+.header__right {
+  flex: 0 0 auto;
+  z-index: 1002; /* acima do centro para manter cliques seguros */
+}
+
+/* Centro: posicionamento absoluto para ficar sempre no meio da tela */
+.header__center {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 100%;
+  max-width: 680px; /* controla largura máxima da busca */
+  display: flex;
+  justify-content: center;
+  z-index: 1001; /* entre header e left/right */
+  pointer-events: auto;
+}
+
+/* Se quiser que o centro não passe visualmente dos cantos, limitadores: */
+.header__center .search {
+  width: 100%;
+  padding: 0 12px; /* garante um pequeno espaçamento lateral para inputs grandes */
+}
+
+/* Logo */
+.header__brand {
+  font-weight: 700;
+  font-size: 1.15rem;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #fff;
+}
+
+/* Ícone opcional do logo */
+.header__brand .logo-mark {
+  width: 34px;
+  height: 34px;
+  background: #fff;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--brand-blue);
+  font-weight: 700;
+}
+
+/* Busca - container (estilos base mantidos) */
+.search {
+  width: 100%;
+  max-width: 600px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: -100px;
+}
+
+/* Envolve o input para ícone interno */
+.search__wrap {
+  position: relative;
+  width: 100%;
+}
+
+/* Input de busca */
+.search__input {
+  width: 100%;
+  padding: 10px 12px 10px 40px;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,0.15);
+  background: rgba(255,255,255,0.12);
+  color: #fff;
+  font-size: 0.95rem;
+  transition: background var(--fast), box-shadow var(--fast), border-color var(--fast);
+}
+
+/* Placeholder */
+.search__input::placeholder {
+  color: rgba(255,255,255,0.85);
+  opacity: 0.9;
+}
+
+/* Ícone na busca */
+.search__icon {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  pointer-events: none;
+  font-size: 1rem;
+  color: rgba(255,255,255,0.95);
+}
+
+/* Foco e hover da busca */
+.search__input:focus {
+  background: #fff;
+  color: var(--text);
+  border-color: rgba(0,0,0,0.08);
+  box-shadow: 0 4px 12px rgba(15,23,36,0.08);
+  padding-left: 42px;
+}
+
+/* Nav direita */
+.header__nav {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* Botão ícone */
+.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px;
+  border-radius: 8px;
+  color: #fff;
+  font-size: 0.95rem;
+  transition: background var(--fast), transform var(--fast);
+}
+
+/* Hover */
+.icon-btn:hover {
+  background: rgba(255,255,255,0.08);
+  transform: translateY(-1px);
+}
+
+/* Botão principal (tweet) */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: #fff;
+  color: var(--brand-blue);
+  padding: 8px 12px;
+  border-radius: 999px;
+  font-weight: 600;
+  box-shadow: 0 2px 8px rgba(15,23,36,0.06);
+  transition: transform var(--fast), box-shadow var(--fast);
+}
+.btn:hover { transform: translateY(-2px); }
+
+/* Avatar */
+.avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  overflow: hidden;
+  background: var(--border);
+}
+
+/* ========= Responsividade ========= */
+/* Em telas pequenas, não usar positioning absolute para o centro:
+   colocamos tudo em linha (left - center - right) com espaço entre */
+@media (max-width: 768px) {
+  .header {
+    padding: 0 12px;
+  }
+
+  .header > .container {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .header__center {
+    position: static;           /* volta ao fluxo normal */
+    transform: none;
+    max-width: calc(100% - 120px); /* deixa espaço para ícones dos lados */
+    margin: 0 8px;
+  }
+
+  .search__input { font-size: 0.95rem; }
+
+  /* esconder botões grandes se necessário */
+  .btn { display: none; }
+}
+
+/* Pequeno ajuste para quando a tela for extremamente estreita */
+@media (max-width: 420px) {
+  .header__center { max-width: calc(100% - 80px); }
+  .search__input { padding-left: 36px; }
+}
+
+
+/*============= Textos =============*/
