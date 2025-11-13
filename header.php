@@ -1,9 +1,10 @@
+<?php include 'services/auth.php' ?>
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>header</title>
     <link rel="stylesheet" href="css/index.css" />
     <script src="js/index.js" defer></script>
 </head>
@@ -80,7 +81,7 @@
           </button>
 
           <!-- avatar -->
-          <a class="icon-btn" href="#" aria-label="Perfil" title="Perfil">
+          <a class="icon-btn" href="pages/login.php" aria-label="Perfil" title="Perfil">
             <span class="avatar" style="display:inline-block; width:36px; height:36px; border-radius:50%; overflow:hidden; background:var(--border);">
               <!-- imagem placeholder -->
               <img src="image/images.jfif" alt="Avatar" style="width:100%;height:100%;object-fit:cover;display:block;">

@@ -1,7 +1,8 @@
 <?php
 
-include 'header.php';
+define('IN_INDEX', true);
 
+include 'header.php';
 
 ?>
 

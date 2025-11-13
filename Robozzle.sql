@@ -22,8 +22,8 @@ CREATE TABLE IF NOT EXISTS users
   id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,   
   nome VARCHAR(255) NOT NULL,                      
   descricao VARCHAR(512),                          
-  email VARCHAR(255) NOT NULL UNIQUE,              
-  password VARCHAR(255) NOT NULL,                  -- hash da senha (bcrypt)
+  email VARCHAR(500) NOT NULL UNIQUE,              
+  password VARCHAR(80) NOT NULL,                  -- hash da senha (bcrypt)
   avatar_url VARCHAR(1024),                        -- link para avatar 
   config JSON,                                     -- preferências (tema, idioma, ...)
   followers_count INT UNSIGNED NOT NULL DEFAULT 0, 
