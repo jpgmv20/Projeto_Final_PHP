@@ -438,3 +438,94 @@ BEGIN
 END$$
 
 DELIMITER ;
+
+#--------------------------------------------------------------------------------
+
+/* ===========================
+            Testes
+   ============================ */
+
+-- Criar usuário
+CALL create_user(
+    'Pedro Miguel',
+    'Criador do jogo Robozzle',
+    'pedro@example.com',
+    'senha123',
+    NULL,
+    JSON_OBJECT('tema', 'dark')
+);
+
+CALL create_user(
+    'Bruno Fernandes Guedes',
+    'Professor de Redes e Banco de dados, e é grande amigo da 2 info',
+    'guedes@example.com',
+    'senha123',
+    NULL,
+    JSON_OBJECT('tema', 'dark')
+);
+
+-- Seguir
+CALL create_follower(1, 2);
+
+CALL create_follower(2, 1);
+
+-- Deixar de seguir
+CALL delete_follower(1, 2);
+
+CALL delete_follower(2, 1);
+
+-- Criar level
+CALL create_level(
+    1,
+    'Nível Inicial',
+    'Passe por 3 cores.',
+    'easy',
+    JSON_OBJECT('map', '[ [1,0], [0,1] ]'),
+    TRUE
+);
+
+-- Criar programa
+CALL create_program(
+    1,
+    1,
+    JSON_ARRAY('F1', 'F2', 'F1')
+);
+
+-- Registrar execução
+CALL create_run(
+    1,
+    1,
+    1,
+    'success',
+    24
+);
+
+-- Curtir level
+CALL create_like(1, 1);
+
+-- Remover curtida
+CALL delete_like(1, 1);
+
+-- Criar comentário
+CALL create_comment(1, 1, 'Muito bom esse level!');
+
+SELECT *
+FROM users;
+
+SELECT *
+FROM levels;
+
+SELECT *
+FROM programs;
+
+SELECT *
+FROM runs;
+
+SELECT *
+FROM likes;
+
+SELECT *
+FROM followers;
+
+SELECT *
+FROM comments;
