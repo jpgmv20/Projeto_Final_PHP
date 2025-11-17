@@ -35,4 +35,4 @@ require_once __DIR__ . '/../services/config.php';
 </body>
 </html>
 
-<?php include '../footer.php';?>
+<?php include __DIR__ . '../footer.php';?>

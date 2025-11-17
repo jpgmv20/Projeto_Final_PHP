@@ -2,13 +2,19 @@
 require_once __DIR__ . '/config.php';
 
 
-
-if (defined('IN_INDEX')) {
-    if (!isset($_COOKIE['path'])) {
+if (!isset($_COOKIE['path'],$_COOKIE['url'])){
+        
+    if (defined('IN_INDEX')) {
+  
         $projectRoot = realpath(__DIR__ . '/../');
+
         setcookie('path', $projectRoot, time() + 24*60*60, '/');
-        setcookie('url', BASE_URL, time() + 24*60*60, '/');
+        setcookie('url', BASE_URL, time() + 24*60*60, '/');        
+
+    }else{
+
     }
+
 }
 
 if (isset($_SESSION['usuario'])) {
@@ -17,10 +23,10 @@ if (isset($_SESSION['usuario'])) {
     setcookie('login_token', $token, time() + 24*60*60, '/');
 } else {
     if (isset($_COOKIE['url'])){
-        //header('Location: ' . $_COOKIE['url'] . '/pages/login.php');
-        //exit;
+        header('Location: ' . $_COOKIE['url'] . '/pages/login.php');
+        exit;
     }else{
-        //header('Location: ' . BASE_URL . '/pages/login.php');
-        //exit;
+        header('Location: ' . __DIR__ . '/../pages/login.php');
+        exit;
     };
 }

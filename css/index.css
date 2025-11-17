@@ -316,3 +316,142 @@ button { font: inherit; cursor: pointer; border: none; background: none; }
   .header__center { max-width: calc(100% - 80px); }
   .search__input { padding-left: 36px; }
 }
+
+/* ===== Overrides / estilos do login (append no index.css) ===== */
+.login-page {
+  min-height: calc(100vh - var(--header-height));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 16px;
+  background: linear-gradient(180deg, var(--bg), rgba(0,0,0,0.02));
+}
+
+.login-card {
+  width: 100%;
+  max-width: 420px;
+  background: var(--surface);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 28px;
+  border: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap);
+}
+
+.login-card .brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 4px;
+}
+.login-card .brand .logo-mark {
+  width: 48px;
+  height: 48px;
+  border-radius: 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  background: linear-gradient(135deg, var(--brand-blue), var(--brand-blue-dark));
+  color: #fff;
+  font-size: 1.1rem;
+}
+
+.login-card h1 {
+  margin: 0;
+  font-size: 1.15rem;
+  color: var(--text);
+}
+
+.login-form {
+  display: grid;
+  gap: 12px;
+}
+
+.login-form label {
+  font-size: 0.9rem;
+  color: var(--muted);
+  display: block;
+}
+
+.login-form input[type="email"],
+.login-form input[type="password"],
+.login-form input[type="text"] {
+  width: 100%;
+  padding: 12px 14px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text);
+  font-size: 1rem;
+  transition: box-shadow 160ms, border-color 160ms;
+}
+
+.login-form input::placeholder { color: rgba(15,23,36,0.35); }
+
+.login-form input:focus {
+  outline: none;
+  border-color: var(--brand-blue);
+  box-shadow: 0 6px 18px rgba(29,161,242,0.08);
+}
+
+.form-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.remember {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.login-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+/* reaproveita .btn do index.css; definimos variante primária */
+.btn--primary {
+  background: linear-gradient(180deg, var(--brand-blue), var(--brand-blue-dark));
+  color: #fff;
+  padding: 10px 14px;
+  border-radius: 10px;
+  font-weight: 700;
+  text-align: center;
+  box-shadow: 0 8px 22px rgba(13,149,232,0.12);
+}
+
+.btn--link {
+  background: none;
+  color: var(--brand-blue);
+  text-decoration: none;
+  font-weight: 600;
+  padding: 8px;
+  border-radius: 8px;
+}
+
+/* Mensagem de erro / success */
+.input-error {
+  color: var(--danger);
+  font-size: 0.85rem;
+  margin-top: 4px;
+}
+
+/* Responsividade */
+@media (max-width: 480px) {
+  .login-card {
+    padding: 20px;
+    border-radius: 12px;
+  }
+
+  .login-card .brand .logo-mark { width: 40px; height: 40px; font-size: 1rem; }
+}
