@@ -7,10 +7,12 @@
 </head>
 <body>
    
-  <!-- rodapé simples -->
+  <!-- rodapé -->
    
-  <footer class="container" style="padding:var(--gap-lg) 0; color:var(--muted);">
-    <small>© 2025 Pedro Miguel — Todos os direitos reservados</small>
-  </footer>
+<footer class="footer container">
+  <small>© 2025 Pedro Miguel — Todos os direitos reservados</small>
+</footer>
 </body>
 </html>
+
+<?PHP require __DIR__ . '/services/auth.php'?>

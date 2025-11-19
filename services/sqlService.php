@@ -1,3 +1,4 @@
+<?PHP
 
 $localhost="localhost";
 $usuario="root";

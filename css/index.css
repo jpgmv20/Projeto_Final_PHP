@@ -1,8 +1,11 @@
 /* styles.css
-   Header estilo Twitter — esquerda e direita nos cantos, pesquisa centralizada
+   Layout principal + header + footer + login
+   Tudo unificado — tema claro + tema escuro via variáveis
 */
 
-/* ========== Variáveis ========== */
+/* ========== Variáveis ==========
+   Defina aqui as cores e espaçamentos globais.
+*/
 :root{
   --brand-blue: #1da1f2;
   --brand-blue-dark: #0d95e8;
@@ -99,9 +102,9 @@ button { font: inherit; cursor: pointer; border: none; background: none; }
   color: #fff;
   display: flex;
   align-items: center;
-  justify-content: space-between; /* empurra left e right para as extremidades */
+  justify-content: space-between;
   padding: 0 var(--gap);
-  position: relative; /* referência para centralizar o centro absolute */
+  position: relative;
   z-index: 1000;
 }
 
@@ -114,13 +117,13 @@ button { font: inherit; cursor: pointer; border: none; background: none; }
   box-shadow: var(--shadow);
 }
 
-/* Garantir que o container interno controle o layout mas permita o centro absolute */
+/* Container interno do header */
 .header > .container {
   display: flex;
   align-items: center;
   width: 100%;
-  position: relative; /* referencia para .header__center absolute */
-  padding: 0; /* padding é aplicado no .header (já tem) */
+  position: relative;
+  padding: 0;
 }
 
 /* Layout do header: esquerda (logo), centro (busca), direita (ícones) */
@@ -136,7 +139,7 @@ button { font: inherit; cursor: pointer; border: none; background: none; }
 .header__left,
 .header__right {
   flex: 0 0 auto;
-  z-index: 1002; /* acima do centro para manter cliques seguros */
+  z-index: 1002;
 }
 
 /* Centro: posicionamento absoluto para ficar sempre no meio da tela */
@@ -145,17 +148,17 @@ button { font: inherit; cursor: pointer; border: none; background: none; }
   left: 50%;
   transform: translateX(-50%);
   width: 100%;
-  max-width: 680px; /* controla largura máxima da busca */
+  max-width: 680px;
   display: flex;
   justify-content: center;
-  z-index: 1001; /* entre header e left/right */
+  z-index: 1001;
   pointer-events: auto;
 }
 
 /* Se quiser que o centro não passe visualmente dos cantos, limitadores: */
 .header__center .search {
   width: 100%;
-  padding: 0 12px; /* garante um pequeno espaçamento lateral para inputs grandes */
+  padding: 0 12px;
 }
 
 /* Logo */
@@ -181,7 +184,7 @@ button { font: inherit; cursor: pointer; border: none; background: none; }
   font-weight: 700;
 }
 
-/* Busca - container (estilos base mantidos) */
+/* Busca - container */
 .search {
   width: 100%;
   max-width: 600px;
@@ -197,7 +200,7 @@ button { font: inherit; cursor: pointer; border: none; background: none; }
   width: 100%;
 }
 
-/* Input de busca */
+/* Input de busca (visível no header com background brand) */
 .search__input {
   width: 100%;
   padding: 10px 12px 10px 40px;
@@ -285,8 +288,6 @@ button { font: inherit; cursor: pointer; border: none; background: none; }
 }
 
 /* ========= Responsividade ========= */
-/* Em telas pequenas, não usar positioning absolute para o centro:
-   colocamos tudo em linha (left - center - right) com espaço entre */
 @media (max-width: 768px) {
   .header {
     padding: 0 12px;
@@ -299,15 +300,14 @@ button { font: inherit; cursor: pointer; border: none; background: none; }
   }
 
   .header__center {
-    position: static;           /* volta ao fluxo normal */
+    position: static;
     transform: none;
-    max-width: calc(100% - 120px); /* deixa espaço para ícones dos lados */
+    max-width: calc(100% - 120px);
     margin: 0 8px;
   }
 
   .search__input { font-size: 0.95rem; }
 
-  /* esconder botões grandes se necessário */
   .btn { display: none; }
 }
 
@@ -317,16 +317,32 @@ button { font: inherit; cursor: pointer; border: none; background: none; }
   .search__input { padding-left: 36px; }
 }
 
-/* ===== Overrides / estilos do login (append no index.css) ===== */
+/* ========== Footer ========= */
+.footer {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+  padding: var(--gap-lg) 0;
+  color: var(--muted);
+}
+
+/* ===== Login — adaptado para as cores da página principal ===== */
 .login-page {
   min-height: calc(100vh - var(--header-height));
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 40px 16px;
-  background: linear-gradient(180deg, var(--bg), rgba(0,0,0,0.02));
+
+  /* leve acento no tema claro — em dark será sobrescrito para usar --bg puro */
+  background: linear-gradient(180deg,
+    rgba(29,161,242,0.04) 0%,
+    var(--bg) 60%);
+  color: var(--text);
 }
 
+/* Card com destaque de marca no topo */
 .login-card {
   width: 100%;
   max-width: 420px;
@@ -338,8 +354,21 @@ button { font: inherit; cursor: pointer; border: none; background: none; }
   display: flex;
   flex-direction: column;
   gap: var(--gap);
+
+  position: relative;
+  overflow: hidden;
+}
+.login-card::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 6px;
+  background: linear-gradient(90deg, var(--brand-blue), var(--brand-blue-dark));
 }
 
+/* Marca dentro do card mantém gradiente e usa variáveis */
 .login-card .brand {
   display: flex;
   align-items: center;
@@ -357,6 +386,7 @@ button { font: inherit; cursor: pointer; border: none; background: none; }
   background: linear-gradient(135deg, var(--brand-blue), var(--brand-blue-dark));
   color: #fff;
   font-size: 1.1rem;
+  box-shadow: 0 4px 10px rgba(13,149,232,0.06);
 }
 
 .login-card h1 {
@@ -365,6 +395,7 @@ button { font: inherit; cursor: pointer; border: none; background: none; }
   color: var(--text);
 }
 
+/* Formulário — usa cores de texto e borda globais */
 .login-form {
   display: grid;
   gap: 12px;
@@ -376,6 +407,7 @@ button { font: inherit; cursor: pointer; border: none; background: none; }
   display: block;
 }
 
+/* Inputs: borda, foco e placeholder alinhados ao tema */
 .login-form input[type="email"],
 .login-form input[type="password"],
 .login-form input[type="text"] {
@@ -386,17 +418,24 @@ button { font: inherit; cursor: pointer; border: none; background: none; }
   background: transparent;
   color: var(--text);
   font-size: 1rem;
-  transition: box-shadow 160ms, border-color 160ms;
+  transition: box-shadow 160ms, border-color 160ms, background 160ms;
 }
 
-.login-form input::placeholder { color: rgba(15,23,36,0.35); }
+/* placeholder usa cor mutada (funciona com tema claro/escuro) */
+.login-form input::placeholder {
+  color: var(--muted);
+  opacity: 0.8;
+}
 
+/* estado de foco com cor da marca */
 .login-form input:focus {
   outline: none;
   border-color: var(--brand-blue);
-  box-shadow: 0 6px 18px rgba(29,161,242,0.08);
+  box-shadow: 0 8px 22px rgba(29,161,242,0.08);
+  background: rgba(29,161,242,0.02);
 }
 
+/* linha com lembrar/esqueci */
 .form-row {
   display: flex;
   align-items: center;
@@ -412,6 +451,7 @@ button { font: inherit; cursor: pointer; border: none; background: none; }
   font-size: 0.9rem;
 }
 
+/* ações — botão primário com o gradiente da marca */
 .login-actions {
   display: flex;
   flex-direction: column;
@@ -419,7 +459,6 @@ button { font: inherit; cursor: pointer; border: none; background: none; }
   margin-top: 4px;
 }
 
-/* reaproveita .btn do index.css; definimos variante primária */
 .btn--primary {
   background: linear-gradient(180deg, var(--brand-blue), var(--brand-blue-dark));
   color: #fff;
@@ -427,8 +466,11 @@ button { font: inherit; cursor: pointer; border: none; background: none; }
   border-radius: 10px;
   font-weight: 700;
   text-align: center;
-  box-shadow: 0 8px 22px rgba(13,149,232,0.12);
+  box-shadow: 0 10px 28px rgba(13,149,232,0.12);
+  border: none;
 }
+
+.btn--primary:active { transform: translateY(1px); }
 
 .btn--link {
   background: none;
@@ -439,14 +481,14 @@ button { font: inherit; cursor: pointer; border: none; background: none; }
   border-radius: 8px;
 }
 
-/* Mensagem de erro / success */
+/* mensagens de erro / sucesso com variáveis */
 .input-error {
   color: var(--danger);
   font-size: 0.85rem;
   margin-top: 4px;
 }
 
-/* Responsividade */
+/* Responsividade leve (agora com cores herdadas) */
 @media (max-width: 480px) {
   .login-card {
     padding: 20px;
@@ -454,4 +496,112 @@ button { font: inherit; cursor: pointer; border: none; background: none; }
   }
 
   .login-card .brand .logo-mark { width: 40px; height: 40px; font-size: 1rem; }
+}
+
+/* ===== Tema escuro — O site inteiro (incluindo login) herda apenas variáveis ===== */
+
+/* Para o login em modo escuro, NÃO redefinimos cores arbitrárias:
+   apenas fazemos componentes usarem as variáveis já alteradas em body.theme-dark.
+*/
+
+body.theme-dark {
+  /* as variáveis já foram definidas no topo; nada extra aqui é necessário */
+}
+
+/* Fundo do login no dark usa o bg puro (sem o acento do claro) */
+body.theme-dark .login-page {
+  background: var(--bg);
+  color: var(--text);
+}
+
+/* Card e inputs herdam surface/border/text do tema */
+body.theme-dark .login-card {
+  background: var(--surface);
+  border-color: var(--border);
+  color: var(--text);
+}
+
+body.theme-dark .login-card::before {
+  /* mantém o accent da marca mesmo no dark */
+  background: linear-gradient(90deg, var(--brand-blue), var(--brand-blue-dark));
+}
+
+/* Inputs no modo escuro se mantêm consistentes com surface/border */
+body.theme-dark .login-form input {
+  background: var(--surface);
+  border-color: var(--border);
+  color: var(--text);
+}
+
+body.theme-dark .login-form input::placeholder {
+  color: var(--muted);
+}
+
+/* Botões primários continuam com o gradiente da marca (mesmo no dark) */
+body.theme-dark .btn--primary {
+  background: linear-gradient(180deg, var(--brand-blue), var(--brand-blue-dark));
+}
+
+/* Links com accent da marca */
+body.theme-dark .btn--link {
+  color: var(--brand-blue);
+}
+
+
+.avatar-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.avatar-circle {
+  width: 120px;
+  height: 120px;
+  border-radius: 50%;
+  overflow: hidden;
+  border: 2px solid var(--border);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  cursor: pointer;
+  transition: transform .2s;
+}
+
+.avatar-circle:hover {
+  transform: scale(1.03);
+}
+
+.avatar-circle img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.avatar-buttons {
+  display: flex;
+  gap: 10px;
+}
+
+.avatar-buttons button {
+  padding: 6px 14px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.avatar-url-input {
+  margin-top: 6px;
+  width: 100%;
+  padding: 10px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  display: none;
 }
