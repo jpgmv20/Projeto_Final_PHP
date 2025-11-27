@@ -1,8 +1,3 @@
-<?php
-require_once __DIR__ . '/../services/config.php';
-define('IN_CREATE', true);
-?>
-
 <!doctype html>
 <html lang="pt-BR">
 <head>
@@ -11,7 +6,7 @@ define('IN_CREATE', true);
   <title>Login</title>
   <link rel="stylesheet" href="../css/index.css">
 </head>
-<body class="theme-dark">
+<body class="<?PHP $config = $_SESSION['config']['tema'] ?? ""; echo $config ?>">
   <main>
     <section class="login-page" aria-labelledby="login-title">
       <div class="container">
@@ -26,7 +21,7 @@ define('IN_CREATE', true);
             </div>
           </div>
 
-          <form class="login-form" action="#" method="post" onsubmit="event.preventDefault(); alert('Formulário enviado');">
+          <form class="login-form" action="../controller/controller_login.php" method="post">
             <div>
               <label for="email">E-mail</label>
               <input id="email" name="email" type="email" placeholder="email@gmail.com" required>
@@ -49,12 +44,13 @@ define('IN_CREATE', true);
               <a class="btn--link" href="register.php">Criar conta</a>
             </div>
           </form>
+
         </div>
       </div>
     </section>
   </main>
+  <?php include_once('../footer.php');?>
 </body>
 </html>
 
 
-<?php include __DIR__ . '/../footer.php';?>

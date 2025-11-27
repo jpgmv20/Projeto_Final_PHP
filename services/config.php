@@ -1,13 +1,49 @@
 <?php
-// Caminho absoluto no servidor
-define('BASE_PATH', __DIR__);
 
-// URL base dinâmica (funciona mesmo se mudar o nome da pasta)
-$protocol = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? "https://" : "http://";
-$host = $_SERVER['HTTP_HOST'];
+function connect_mysql()
+{
+    $localhost="localhost";
+    $usuario="root";
+    $senha="";//mudar para Cefet123, #Black7227,25022008
+    $banco="robozzle";
 
-// Descobre o caminho da pasta do projeto dinamicamente
-$scriptName = str_replace('\\', '/', dirname($_SERVER['SCRIPT_NAME']));
-$baseUrl = rtrim($protocol . $host . $scriptName, '/');
+    $mysqli= new mysqli($localhost,$usuario,$senha,$banco); // -> nao é pratico.  Vai estar abrindo e fechando conexao toda santa hora
 
-define('BASE_URL', $baseUrl);
+    if($mysqli->connect_errno)
+    {
+        echo 'Falha ao conectar: (' . $mysqli->connect_errno . ')' . $mysqli->connect_error;
+    }
+
+    return $mysqli;
+
+}
+
+function create_user($nome, $email, $password_hash, $avatar_url, $config_json)
+{
+    $mysqli = connect_mysql();
+
+    $stmt = $mysqli->prepare("CALL create_user(?, '', ?, ?, ?, ?)");
+    $stmt->bind_param("sssss", $nome, $email, $password_hash, $avatar_url, $config_json);
+
+    $stmt->execute();
+    $stmt->close();
+    echo 'sucesso';
+}
+
+
+
+
+
+
+
+function PHPconsole($data) 
+{
+    //console.log versão php
+    $output = $data;
+    if (is_array($output))
+        $output = implode(',', $output);
+
+    echo "<script>console.log('Console: " . $output . "' );</script>";
+} 
+
+?>

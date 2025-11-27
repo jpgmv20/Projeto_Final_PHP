@@ -16,7 +16,9 @@ function openAvatarOptions() {
     chooseFile();
 }
 
+
 document.getElementById("avatar_input").addEventListener("change", function() {
+    console.log(this.files[0])
     const file = this.files[0];
     if (!file) return;
 

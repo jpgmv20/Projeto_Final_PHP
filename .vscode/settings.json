@@ -1,5 +1,5 @@
 {
-    "window.zoomLevel": 1.4,
-    "editor.fontSize": 12,
+    "window.zoomLevel": 1.2,
+    "editor.fontSize": 10,
     "terminal.integrated.defaultProfile.windows": "Command Prompt"
 }

@@ -1,95 +1,428 @@
-<?php include 'services/auth.php' ?>
+<?php
 
-<!DOCTYPE html>
-<html lang="en">
+require_once __DIR__ . '/services/config.php';
+
+session_start();
+
+/**
+ * Normaliza o caminho do avatar vindo do DB/SESSION e retorna uma URL completa.
+ * - Se $path for vazio -> retorna fallback padrão.
+ * - Se $path já for http(s) -> retorna inalterado.
+ * - Se $path for relativo (ex: "image/foo.jpg" ou "Projeto_Final_PHP/image/foo.jpg")
+ *   -> monta: http://<host>/Projeto_Final_PHP/<path-sem-duplicacao>
+ */
+if (!function_exists('avatar_url_web')) {
+    function avatar_url_web(string $path = ''): string {
+        // fallback relativo (apontando para dentro do projeto)
+        $default = 'image/images.jfif';
+
+        // se vazio devolve fallback absoluto
+        if (empty($path)) {
+            return 'http://' . $_SERVER['HTTP_HOST'] . '/Projeto_Final_PHP/' . $default;
+        }
+
+        // se já for URL absoluta, devolve
+        if (preg_match('#^https?://#i', $path)) {
+            return $path;
+        }
+
+        // remove barras iniciais
+        $p = ltrim($path, '/');
+
+        // remove repetições do nome do projeto para evitar /Projeto_Final_PHP/Projeto_Final_PHP/...
+        $p = preg_replace('#^(?:Projeto_Final_PHP/)+#i', '', $p);
+
+        // monta URL final
+        return 'http://' . $_SERVER['HTTP_HOST'] . '/Projeto_Final_PHP/' . $p;
+    }
+}
+
+// -- restaurar sessão automaticamente se existir cookie remember_me --
+if (!isset($_SESSION['id']) && isset($_COOKIE['remember_me'])) {
+
+    // proteção: explode apenas se conter ':'
+    if (strpos($_COOKIE['remember_me'], ':') !== false) {
+        list($user_id, $token) = explode(":", $_COOKIE['remember_me'], 2);
+        $token_hash = hash('sha256', $token);
+
+        $mysqli = connect_mysql();
+
+        if ($mysqli) {
+            $stmt = $mysqli->prepare("
+                SELECT users.id, users.nome, users.descricao, users.email, users.avatar_url, users.config
+                FROM user_tokens
+                JOIN users ON users.id = user_tokens.user_id
+                WHERE user_tokens.user_id = ?
+                AND user_tokens.token_hash = ?
+                AND user_tokens.expires_at > NOW()
+                LIMIT 1
+            ");
+
+            if ($stmt) {
+                $stmt->bind_param("is", $user_id, $token_hash);
+                $stmt->execute();
+                $result = $stmt->get_result();
+
+                if ($user = $result->fetch_assoc()) {
+
+                    // recria a sessão
+                    $_SESSION['id'] = $user["id"];
+                    $_SESSION['nome'] = $user["nome"];
+                    $_SESSION['descricao'] = $user["descricao"];
+                    $_SESSION['email'] = $user["email"];
+                    $_SESSION['avatar_url'] = $user["avatar_url"];
+                    // se config for JSON guardado como string no DB, decodifique; se já for array/obj, mantenha
+                    $_SESSION['config'] = is_string($user["config"]) ? json_decode($user["config"], true) : $user["config"];
+
+                } else {
+
+                    // token inválido → apaga o cookie
+                    setcookie("remember_me", "", time() - 3600, "/");
+                }
+
+                $stmt->close();
+            }
+
+            $mysqli->close();
+        }
+    } else {
+        // cookie malformado -> apaga para evitar re-execuções
+        setcookie("remember_me", "", time() - 3600, "/");
+    }
+}
+
+?>
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link rel="stylesheet" href="<?= BASE_URL ?>/css/index.css" />
-    <script src="js/index.js" defer></script>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <!-- Mantive o seu CSS padrão. Se quiser apontar para um CSS local em /mnt/data (upload), substitua a linha abaixo -->
+  <link rel="stylesheet" href="<?php echo 'http://' . $_SERVER['HTTP_HOST'] . '/Projeto_Final_PHP/css/index.css'; ?>" />
+  <!-- EXEMPLO (não necessário): <link rel="stylesheet" href="<?php echo avatar_url_web('css/hub.css'); ?>"> -->
 </head>
-<body>
-    <header class="header header--fixed" role="banner">
-    <div class="container" style="display:flex; align-items:center; gap:var(--gap);">
 
+<header class="header header--fixed" role="banner">
+  <div class="container" style="display:flex; align-items:center; gap:var(--gap);">
 
-
-      <!-- lado esquerdo: logo -->
-
-      <div class="header__left">
-        <a class="header__brand" href="/" aria-label="Página inicial">
-          <span class="logo-mark" aria-hidden="true">PM</span>
-          <span class="sr-only">Robuzzle </span>
-          <span>Home</span>
-        </a>
-      </div>
-
-
-
-      <!-- centro: busca -->
-
-      <div class="header__center" aria-hidden="false">
-        <div class="search" role="search" aria-label="Buscar">
-          <div class="search__wrap">
-            <!-- ícone de lupa (simples SVG) -->
-            <span class="search__icon" aria-hidden="true">
-              <!-- SVG pequeno — sem estilo inline pesado -->
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-                <path d="M21 21l-4.35-4.35" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                <circle cx="11" cy="11" r="6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-              </svg>
-            </span>
-
-            <input
-              class="search__input"
-              type="search"
-              name="q"
-              placeholder="Buscar no site"
-              aria-label="Buscar"
-            />
-          </div>
-        </div>
-      </div>
-
-
-
-
-      <!-- direita: nav / botões -->
-
-      <div class="header__right" style="margin-left:auto;">
-        <nav class="header__nav" role="navigation" aria-label="Navegação principal">
-          <a class="icon-btn" href="#" aria-label="Notificações" title="Notificações">
-            <!-- ícone de sino (simples) -->
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
-              <path d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6 6 0 10-12 0v3.159c0 .538-.214 1.055-.595 1.436L4 17h5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
-              <path d="M13.73 21a2 2 0 01-3.46 0" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
-            </svg>
-          </a>
-
-          <a class="icon-btn" href="#" aria-label="Mensagens" title="Mensagens">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
-              <path d="M21 15a2 2 0 01-2 2H7l-4 3V5a2 2 0 012-2h14a2 2 0 012 2z" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
-            </svg>
-          </a>
-
-          <!-- botão principal (ex: publicar/tweet) -->
-          <button class="btn" type="button" aria-label="Novo post">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
-              <path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
-            </svg>
-            <span>Postar</span>
-          </button>
-
-          <!-- avatar -->
-          <a class="icon-btn" href="pages/login.php" aria-label="Perfil" title="Perfil">
-            <span class="avatar" style="display:inline-block; width:36px; height:36px; border-radius:50%; overflow:hidden; background:var(--border);">
-              <!-- imagem placeholder -->
-              <img src="image/images.jfif" alt="Avatar" style="width:100%;height:100%;object-fit:cover;display:block;">
-            </span>
-          </a>
-        </nav>
-      </div>
+    <!-- lado esquerdo: logo -->
+    <div class="header__left">
+      <a class="header__brand" href="<?php echo 'http://' . $_SERVER['HTTP_HOST'] . '/Projeto_Final_PHP/'; ?>" aria-label="Página inicial">
+        <span class="logo-mark" aria-hidden="true">PM</span>
+        <span class="sr-only">Robozzle </span>
+        <span>Home</span>
+      </a>
     </div>
-  </header>
-</body>
-</html>
+
+
+<!-- centro: busca -->
+<div class="header__center" aria-hidden="false">
+  <div class="search" role="search" aria-label="Buscar">
+    <div class="search__wrap">
+
+      <!-- ícone de lupa (simples SVG) -->
+      <span class="search__icon" aria-hidden="true">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+             xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <path d="M21 21l-4.35-4.35"
+                stroke="currentColor" stroke-width="2"
+                stroke-linecap="round" stroke-linejoin="round"/>
+          <circle cx="11" cy="11" r="6"
+                  stroke="currentColor" stroke-width="2"
+                  stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </span>
+
+      <!-- campo de pesquisa -->
+      <input
+        class="search__input"
+        type="search"
+        name="q"
+        id="globalSearch"
+        placeholder="Buscar no site"
+        aria-label="Buscar"
+        autocomplete="off"
+      />
+
+      <!-- RESULTADOS (substitua a div anterior por este bloco) -->
+<style>
+  /* escopo local: garante que o dropdown apareça abaixo do input, não seja transparente e tenha scrollbar */
+  .search__wrap { position: relative; } /* reforça o contexto de posicionamento */
+  #searchResults {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: calc(100% + 8px);        /* fica logo abaixo do input */
+    background: var(--surface, #ffffff);
+    color: var(--text, #0b1220);
+    border: 1px solid rgba(0,0,0,0.08);
+    box-shadow: 0 10px 30px rgba(2,6,23,0.12);
+    border-radius: 8px;
+    z-index: 1200;
+    max-height: 320px;
+    overflow: auto;
+    display: none;                /* o seu JS mostra/esconde */
+    padding: 6px;
+    backdrop-filter: none;        /* evita transparência por fallback */
+  }
+
+  /* visual dos itens */
+  #searchResults .search-result {
+    background: transparent;
+    transition: background .12s;
+  }
+  #searchResults .search-result:hover {
+    background: rgba(11,102,178,0.04);
+  }
+
+  /* evita que o dropdown fique oculto por overflow de algum ancestor */
+  /* se algum elemento pai tiver overflow:hidden, aumente z-index ou mova este estilo para o <head> */
+</style>
+
+<div id="searchResults" class="search-results" role="listbox" aria-label="Resultados da busca"></div>
+
+    </div>
+  </div>
+</div>
+
+
+    <!-- direita: nav / botões -->
+    <div class="header__right" style="margin-left:auto;">
+      <nav class="header__nav" role="navigation" aria-label="Navegação principal">
+
+        <?php
+          if (isset($_SESSION['id']))
+          {
+            $url = 'http://' . $_SERVER['HTTP_HOST'] . '/Projeto_Final_PHP/view/login.php';
+            $url2 = 'http://' . $_SERVER['HTTP_HOST'] . '/Projeto_Final_PHP/view/hub.php';
+            $url3 = 'http://' . $_SERVER['HTTP_HOST'] . '/Projeto_Final_PHP/view/post.php';
+            $url4 = 'http://' . $_SERVER['HTTP_HOST'] . '/Projeto_Final_PHP/view/notify.php';
+            $url5 = 'http://' . $_SERVER['HTTP_HOST'] . '/Projeto_Final_PHP/services/logount.php';
+
+            $username = htmlspecialchars($_SESSION['nome'] ?? 'Usuário', ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+
+            // Normaliza avatar URL com a função utilitária
+            $stored = $_SESSION['avatar_url'] ?? '';
+            $avatar_url = avatar_url_web($stored);
+
+            echo <<<HTML
+            <a class="icon-btn" href="$url4" aria-label="Notificações" title="Notificações">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
+                <path d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6 6 0 10-12 0v3.159c0 .538-.214 1.055-.595 1.436L4 17h5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+                <path d="M13.73 21a2 2 0 01-3.46 0" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </a>
+
+            <a class="icon-btn" href="$url2" aria-label="Mensagens" title="Mensagens">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
+                <path d="M21 15a2 2 0 01-2 2H7l-4 3V5a2 2 0 012-2h14a2 2 0 012 2z" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </a>
+
+            <!-- botão principal (ex: publicar/tweet) -->
+            <a href="$url3">
+              <button class="btn" type="button" aria-label="Novo post">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+                <span>Postar</span>
+              </button>
+            </a>
+
+            <!-- avatar + nome -->
+            <a class="icon-btn" href="$url5" aria-label="Perfil" title="Perfil" style="display:flex;align-items:center;gap:8px;">
+              <span style="font-weight:bold;margin-right:6px;">$username</span>
+              <span class="avatar" style="display:inline-block; width:36px; height:36px; border-radius:50%; overflow:hidden; background:var(--border);">
+                <img src="$avatar_url" alt="Avatar" style="width:100%;height:100%;object-fit:cover;display:block;">
+              </span>
+            </a>
+
+            HTML;
+          }
+          else
+          {
+            $url = 'http://' . $_SERVER['HTTP_HOST'] . '/Projeto_Final_PHP/view/login.php';
+            $url2 = 'http://' . $_SERVER['HTTP_HOST'] . '/Projeto_Final_PHP/view/register.php';
+
+            echo <<<HTML
+              <!-- botão Login -->
+              <a class="icon-btn" href="$url" aria-label="Perfil" title="Perfil">
+                <button class="btn" type="button" aria-label="Login_btn">
+                  <span>Login</span>
+                </button>
+              </a>
+
+              <a class="icon-btn" href="$url2" aria-label="Perfil" title="Perfil">
+                <button class="btn--register" type="button" aria-label="Login_btn">
+                  <span>Register</span>
+                </button>
+              </a>
+
+            HTML;
+          }
+        ?>
+      </nav>
+    </div>
+  </div>
+</header>
+
+<script>
+(function(){
+  const input = document.getElementById('globalSearchInput') || document.querySelector('.search__input');
+  const resultsBox = document.getElementById('searchResults');
+  if (!input || !resultsBox) return;
+
+  let timer = null;
+  let lastQ = '';
+
+  // cria nó visual de resultado
+  function createResultNode(item) {
+    const el = document.createElement('div');
+    el.className = 'search-result';
+    el.style.display = 'flex';
+    el.style.gap = '8px';
+    el.style.alignItems = 'center';
+    el.style.padding = '6px';
+    el.style.borderRadius = '6px';
+    el.style.cursor = 'pointer';
+
+    const avatar = document.createElement('div');
+    avatar.style.width = '36px';
+    avatar.style.height = '36px';
+    avatar.style.borderRadius = '50%';
+    avatar.style.overflow = 'hidden';
+    avatar.style.flex = '0 0 36px';
+    const img = document.createElement('img');
+    img.src = item.avatar_url || ('<?php echo 'http://' . $_SERVER['HTTP_HOST'] . '/Projeto_Final_PHP/image/images.jfif'; ?>');
+    img.alt = item.title || item.nome || '';
+    img.style.width = '100%';
+    img.style.height = '100%';
+    img.style.objectFit = 'cover';
+    avatar.appendChild(img);
+
+    const body = document.createElement('div');
+    body.style.flex = '1';
+    body.style.minWidth = '0';
+    const title = document.createElement('div');
+    title.style.fontWeight = '700';
+    title.style.fontSize = '0.95rem';
+    title.style.whiteSpace = 'nowrap';
+    title.style.overflow = 'hidden';
+    title.style.textOverflow = 'ellipsis';
+    title.textContent = item.title || item.nome || '—';
+    const sub = document.createElement('div');
+    sub.style.color = '#6b7280';
+    sub.style.fontSize = '0.85rem';
+    sub.style.whiteSpace = 'nowrap';
+    sub.style.overflow = 'hidden';
+    sub.style.textOverflow = 'ellipsis';
+    sub.textContent = item.sub || '';
+
+    const type = document.createElement('div');
+    type.textContent = (item.type === 'level') ? 'Level' : 'Perfil';
+    type.style.fontSize = '0.75rem';
+    type.style.padding = '3px 8px';
+    type.style.borderRadius = '999px';
+    type.style.background = '#f3f4f6';
+    type.style.color = '#374151';
+    type.style.marginLeft = '8px';
+
+    body.appendChild(title);
+    body.appendChild(sub);
+
+    el.appendChild(avatar);
+    el.appendChild(body);
+    el.appendChild(type);
+
+    el.addEventListener('click', function(){
+      if (item.type === 'level') {
+        // envia POST para level.php com select_level contendo o JSON (campo level_json do resultado)
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.action = '<?php echo 'http://' . $_SERVER['HTTP_HOST'] . '/Projeto_Final_PHP/view/level.php'; ?>';
+        const inp = document.createElement('input');
+        inp.type = 'hidden';
+        inp.name = 'select_level';
+        inp.value = item.level_json || '';
+        form.appendChild(inp);
+        document.body.appendChild(form);
+        form.submit();
+      } else if (item.type === 'user') {
+        // vai para perfil.php (placeholder)
+        window.location.href = '<?php echo 'http://' . $_SERVER['HTTP_HOST'] . '/Projeto_Final_PHP/view/perfil.php'; ?>?user_id=' + encodeURIComponent(item.id);
+      }
+    });
+
+    return el;
+  }
+
+  function showResults(list) {
+    resultsBox.innerHTML = '';
+    if (!Array.isArray(list) || !list.length) {
+      resultsBox.style.display = 'none';
+      return;
+    }
+    list.forEach(it => resultsBox.appendChild(createResultNode(it)));
+    resultsBox.style.display = 'block';
+  }
+
+  function clearResults() {
+    resultsBox.innerHTML = '';
+    resultsBox.style.display = 'none';
+  }
+
+  async function doSearch(q) {
+    if (!q || q.trim().length < 1) {
+      clearResults();
+      return;
+    }
+    try {
+      const url = '<?php echo 'http://' . $_SERVER['HTTP_HOST'] . '/Projeto_Final_PHP/services/search.php'; ?>?q=' + encodeURIComponent(q);
+      const resp = await fetch(url, { credentials: 'same-origin' });
+      if (!resp.ok) { clearResults(); return; }
+      const data = await resp.json();
+      showResults(data.results || []);
+    } catch (err) {
+      console.error('Search error', err);
+      clearResults();
+    }
+  }
+
+  // debounce handler
+  input.addEventListener('input', function(){
+    const q = input.value.trim();
+    if (q === lastQ) return;
+    lastQ = q;
+    if (timer) clearTimeout(timer);
+    timer = setTimeout(() => doSearch(q), 220);
+  });
+
+  // hide when clicking outside
+  document.addEventListener('click', function(e){
+    if (!resultsBox.contains(e.target) && e.target !== input) {
+      clearResults();
+    }
+  });
+
+  // keyboard navigation (opcional básico)
+  let focused = -1;
+  input.addEventListener('keydown', function(e){
+    const items = Array.from(resultsBox.querySelectorAll('.search-result'));
+    if (!items.length) return;
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      focused = Math.min(items.length - 1, focused + 1);
+      items.forEach((it,i)=> it.style.outline = (i===focused) ? '2px solid rgba(11,102,178,0.15)' : 'none');
+      items[focused].scrollIntoView({block:'nearest'});
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      focused = Math.max(0, focused - 1);
+      items.forEach((it,i)=> it.style.outline = (i===focused) ? '2px solid rgba(11,102,178,0.15)' : 'none');
+      items[focused].scrollIntoView({block:'nearest'});
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      if (focused >= 0 && items[focused]) items[focused].click();
+    }
+  });
+
+})();
+</script>
+

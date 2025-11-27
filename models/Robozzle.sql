@@ -35,6 +35,22 @@ CREATE TABLE IF NOT EXISTS users
 #--------------------------------------------------------------------------------
 
 /* ===========================
+   TABELA: users_tokens
+   - acessa as informações do usuário por token
+   ============================ */
+
+CREATE TABLE user_tokens (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    user_id BIGINT UNSIGNED NOT NULL,
+    token_hash CHAR(64) NOT NULL, 
+    expires_at DATETIME NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+#--------------------------------------------------------------------------------
+
+/* ===========================
    TABELA: levels
    - cada registro é uma fase/nivel
    - level_json contém grid, start, functions, objective e constraints
@@ -169,6 +185,44 @@ CREATE TABLE IF NOT EXISTS runs
 -- índices úteis para runs
 CREATE INDEX idx_runs_user ON runs (user_id);
 CREATE INDEX idx_runs_level ON runs (level_id);
+
+
+/* ===========================
+   TABELA: conversas
+   - histórico de conversas
+   ============================ */
+CREATE TABLE IF NOT EXISTS conversations (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  type ENUM('private','group') NOT NULL DEFAULT 'private',
+  title VARCHAR(255) DEFAULT NULL,
+  last_message_at TIMESTAMP NULL DEFAULT NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS conversation_participants (
+  conversation_id BIGINT UNSIGNED NOT NULL,
+  user_id BIGINT UNSIGNED NOT NULL,
+  joined_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (conversation_id, user_id),
+  INDEX idx_conv_part_user (user_id),
+  CONSTRAINT fk_conv_part_conv FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE,
+  CONSTRAINT fk_conv_part_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS conversation_messages (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  conversation_id BIGINT UNSIGNED NOT NULL,
+  sender_id BIGINT UNSIGNED NOT NULL,
+  content TEXT,
+  attachment VARCHAR(1024) DEFAULT NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  read_by JSON NOT NULL ,   -- array JSON de user_ids que já leram a mensagem
+  CONSTRAINT fk_msg_conv FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE,
+  CONSTRAINT fk_msg_user FOREIGN KEY (sender_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE INDEX idx_conv_messages_time ON conversation_messages (conversation_id, created_at DESC);
+
 
 #--------------------------------------------------------------------------------
 
@@ -450,7 +504,7 @@ CALL create_user(
     'Pedro Miguel',
     'Criador do jogo Robozzle',
     'pedro@example.com',
-    'senha123',
+    'senha123', 
     NULL,
     JSON_OBJECT('tema', 'dark')
 );
@@ -476,13 +530,157 @@ CALL delete_follower(2, 1);
 
 -- Criar level
 CALL create_level(
-    1,
-    'Nível Inicial',
-    'Passe por 3 cores.',
-    'easy',
-    JSON_OBJECT('map', '[ [1,0], [0,1] ]'),
-    TRUE
+  1,
+  'Starter Grid',
+  'Fase introdutória simples — só blocos verdes e estrelas.',
+  'easy',
+  '{
+    "title":"Starter Grid",
+    "difficulty":"easy",
+    "grid_cell_size":48,
+    "matrix":[
+      [{"color":"green","symbol":"play"},{"color":"green","symbol":"none"},{"color":"green","symbol":"star"}],
+      [{"color":"green","symbol":"none"},{"color":"green","symbol":"none"},{"color":"green","symbol":"none"}],
+      [{"color":"green","symbol":"none"},{"color":"green","symbol":"none"},{"color":"green","symbol":"star"}]
+    ],
+    "functions":[{"name":"F0","size":3}]
+  }',
+  1
 );
+
+CALL create_level(
+  1,
+  'Two-Branch',
+  'Dois ramos conectados, caminho em blocos azuis até as estrelas.',
+  'easy',
+  '{
+    "title":"Two-Branch",
+    "difficulty":"easy",
+    "grid_cell_size":48,
+    "matrix":[
+      [{"color":"blue","symbol":"play"},{"color":"blue","symbol":"none"},{"color":"blue","symbol":"star"}],
+      [{"color":"blue","symbol":"none"},{"color":"blue","symbol":"none"},{"color":"blue","symbol":"none"}],
+      [{"color":"none","symbol":"none"},{"color":"blue","symbol":"none"},{"color":"blue","symbol":"star"}]
+    ],
+    "functions":[{"name":"F0","size":3}]
+  }',
+  1
+);
+
+CALL create_level(
+  1,
+  'Corner Logic',
+  'Requer checagem condicional em bloco sólido vermelho para virar e coletar estrela.',
+  'medium',
+  '{
+    "title":"Corner Logic",
+    "difficulty":"medium",
+    "grid_cell_size":48,
+    "matrix":[
+      [{"color":"red","symbol":"play"},{"color":"red","symbol":"none"},{"color":"red","symbol":"solid"},{"color":"red","symbol":"none"}],
+      [{"color":"red","symbol":"none"},{"color":"red","symbol":"none"},{"color":"red","symbol":"none"},{"color":"red","symbol":"star"}],
+      [{"color":"none","symbol":"none"},{"color":"red","symbol":"none"},{"color":"red","symbol":"none"},{"color":"red","symbol":"none"}]
+    ],
+    "functions":[{"name":"F0","size":4},{"name":"F1","size":2}]
+  }',
+  1
+);
+
+CALL create_level(
+  1,
+  'Loop Lab',
+  'Grade maior que exige uso de recursão/loop entre funções para economizar comandos.',
+  'hard',
+  '{
+    "title":"Loop Lab",
+    "difficulty":"hard",
+    "grid_cell_size":56,
+    "matrix":[
+      [{"color":"green","symbol":"play"},{"color":"green","symbol":"none"},{"color":"green","symbol":"none"},{"color":"green","symbol":"star"}],
+      [{"color":"green","symbol":"none"},{"color":"green","symbol":"solid"},{"color":"green","symbol":"none"},{"color":"green","symbol":"none"}],
+      [{"color":"green","symbol":"none"},{"color":"green","symbol":"none"},{"color":"green","symbol":"none"},{"color":"green","symbol":"star"}],
+      [{"color":"none","symbol":"none"},{"color":"green","symbol":"none"},{"color":"green","symbol":"none"},{"color":"green","symbol":"none"}]
+    ],
+    "functions":[{"name":"F0","size":4},{"name":"F1","size":2}]
+  }',
+  1
+);
+
+CALL create_level(
+  1,
+  'Painter Bridge',
+  'Corredor que utiliza lógica de blocos sólidos e pintura (azul) para condicionals.',
+  'medium',
+  '{
+    "title":"Painter Bridge",
+    "difficulty":"medium",
+    "grid_cell_size":48,
+    "matrix":[
+      [{"color":"blue","symbol":"play"},{"color":"blue","symbol":"none"},{"color":"blue","symbol":"none"},{"color":"blue","symbol":"star"}],
+      [{"color":"blue","symbol":"none"},{"color":"blue","symbol":"solid"},{"color":"blue","symbol":"none"},{"color":"blue","symbol":"none"}],
+      [{"color":"blue","symbol":"none"},{"color":"blue","symbol":"none"},{"color":"blue","symbol":"none"},{"color":"blue","symbol":"none"}]
+    ],
+    "functions":[{"name":"F0","size":3},{"name":"F1","size":2}]
+  }',
+  1
+);
+
+CALL create_level(
+  1,
+  'ZigZag',
+  'Pequena malha para repetição simples — ideal para F0 recorrente.',
+  'easy',
+  '{
+    "title":"ZigZag",
+    "difficulty":"easy",
+    "grid_cell_size":40,
+    "matrix":[
+      [{"color":"green","symbol":"play"},{"color":"green","symbol":"none"},{"color":"green","symbol":"star"}],
+      [{"color":"green","symbol":"none"},{"color":"green","symbol":"none"},{"color":"green","symbol":"none"}]
+    ],
+    "functions":[{"name":"F0","size":2}]
+  }',
+  1
+);
+
+CALL create_level(
+  1,
+  'Red Corridor',
+  'Corredor vermelho com bloco sólido exigindo checagem antes de virar/andar.',
+  'hard',
+  '{
+    "title":"Red Corridor",
+    "difficulty":"hard",
+    "grid_cell_size":48,
+    "matrix":[
+      [{"color":"red","symbol":"play"},{"color":"red","symbol":"none"},{"color":"red","symbol":"solid"},{"color":"red","symbol":"star"}],
+      [{"color":"red","symbol":"none"},{"color":"red","symbol":"none"},{"color":"red","symbol":"none"},{"color":"red","symbol":"none"}]
+    ],
+    "functions":[{"name":"F0","size":5},{"name":"F1","size":2}]
+  }',
+  1
+);
+
+CALL create_level(
+  1,
+  'Strategic Grid',
+  'Nível insano que força chamadas aninhadas e uso inteligente de funções para alcançar estrelas.',
+  'insane',
+  '{
+    "title":"Strategic Grid",
+    "difficulty":"insane",
+    "grid_cell_size":48,
+    "matrix":[
+      [{"color":"green","symbol":"play"},{"color":"green","symbol":"none"},{"color":"green","symbol":"none"},{"color":"green","symbol":"none"}],
+      [{"color":"green","symbol":"none"},{"color":"green","symbol":"solid"},{"color":"green","symbol":"none"},{"color":"green","symbol":"star"}],
+      [{"color":"green","symbol":"none"},{"color":"green","symbol":"none"},{"color":"green","symbol":"none"},{"color":"green","symbol":"none"}],
+      [{"color":"green","symbol":"none"},{"color":"green","symbol":"none"},{"color":"green","symbol":"star"},{"color":"green","symbol":"none"}]
+    ],
+    "functions":[{"name":"F0","size":5},{"name":"F1","size":3}]
+  }',
+  1
+);
+
 
 -- Criar programa
 CALL create_program(
@@ -511,6 +709,19 @@ CALL create_comment(1, 1, 'Muito bom esse level!');
 
 SELECT *
 FROM users;
+
+/* UPDATE users
+SET avatar_url = REPLACE(
+    avatar_url,
+    'gmail.com',
+    'gmail.com_'
+)
+WHERE id = 1;
+*/
+
+-- DELETE FROM levels;
+-- se precisar, resetar auto_increment
+-- ALTER TABLE levels AUTO_INCREMENT = 1;
 
 SELECT *
 FROM levels;

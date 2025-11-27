@@ -1,0 +1,113 @@
+:root{--gap:12px;--muted:#7b8694;--bg:#f6f7fb;--card:#ffffff;--text:#0b1220}
+body{font-family:system-ui,Segoe UI,Roboto,Arial;margin:0;background:var(--bg);color:var(--text);padding:20px}
+.level-wrap{max-width:1200px;margin:0 auto;display:flex;flex-direction:column;gap:18px}
+.level-head{display:flex;flex-direction:column;gap:8px}
+.level-title{font-size:28px;font-weight:700}
+.level-diff{font-size:14px;font-weight:700;padding:6px 10px;border-radius:999px;color:#fff;display:inline-block}
+
+/* layout */
+.level-body{display:grid;grid-template-columns:220px 1fr 280px;gap:16px;align-items:start}
+@media (max-width:960px){ .level-body{grid-template-columns:1fr; } .commands-col, .functions-col{order:2} .board-col{order:1} }
+
+/* commands column */
+.commands-col{background:var(--card);padding:12px;border-radius:12px;box-shadow:0 8px 20px rgba(10,20,40,0.04)}
+.commands-col h4{margin:0 0 8px 0}
+.palette-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.palette-grid .cmd-btn{padding:10px;border-radius:8px;border:1px solid rgba(0,0,0,0.06);background:#fff;cursor:pointer;font-size:18px}
+.palette-grid .cmd-btn:disabled{opacity:0.4;cursor:not-allowed}
+.legend{margin-top:10px;color:var(--muted);font-size:12px}
+
+/* board */
+.board-area{background:linear-gradient(180deg,rgba(0,0,0,0.02),transparent);padding:8px;border-radius:12px}
+.board{background:#e9eef4;padding:14px;border-radius:8px;display:inline-block}
+.grid{display:grid;gap:6px}
+.cell{width:64px;height:64px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:700;box-shadow:0 6px 12px rgba(10,20,40,0.04);border:1px solid rgba(0,0,0,0.04)}
+.c-blue{background: linear-gradient(180deg,#dff4ff,#e3f7ff); color:#0b66b2}
+.c-green{background: linear-gradient(180deg,#e9fbe7,#e2ffe4); color:#10703a}
+.c-red{background: linear-gradient(180deg,#ffeaea,#fff0f0); color:#b91c1c}
+.c-none{background:#fff;color:var(--text);border:1px dashed rgba(0,0,0,0.06)}
+
+/* sequence */
+.sequence-area{margin-top:12px;background:var(--card);padding:10px;border-radius:8px;display:flex;flex-direction:column;gap:8px}
+.sequence-strip{display:flex;gap:6px;min-height:44px;align-items:center}
+.seq-item{padding:8px 10px;border-radius:8px;background:#fff;border:1px solid rgba(0,0,0,0.06);display:inline-flex;align-items:center;justify-content:center;min-width:34px;height:34px}
+.seq-item.active{box-shadow:0 6px 18px rgba(11,102,178,0.12);transform:translateY(-4px)}
+
+/* controls */
+.sequence-controls{display:flex;gap:8px;align-items:center}
+.btn{padding:8px 10px;border-radius:8px;border:0;background:#0b66b2;color:#fff;cursor:pointer}
+.btn.small{padding:6px 8px;font-size:0.9rem}
+
+/* functions column */
+.functions-col{background:var(--card);padding:12px;border-radius:12px;box-shadow:0 8px 20px rgba(10,20,40,0.04)}
+.functions-col h4{margin:0 0 8px 0}
+.function{margin-bottom:12px}
+.fn-title{font-weight:700;margin-bottom:6px}
+.fn-slots{display:flex;gap:6px;flex-wrap:wrap}
+.fn-slot{min-width:34px;height:34px;border-radius:6px;border:1px dashed rgba(0,0,0,0.06);background:#fff;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;font-weight:700}
+.fn-slot[data-empty="1"]{opacity:0.55}
+.fn-slot.selected{outline:2px solid rgba(11,102,178,0.18);background:#f0f9ff}
+
+/* small helpers */
+.small{font-size:12px;color:var(--muted)}
+
+
+/* ajusta gap geral entre colunas (board / functions / commands) */
+.level-body {
+  display: flex;
+  gap: 40px;              /* aumenta espaço entre grid e colunas laterais */
+  align-items: flex-start;
+}
+
+/* garante que o grid fique centralizado horizontalmente e sem texto dentro das células */
+.grid { 
+  display: grid;
+  gap: 8px;
+}
+
+/* símbolo dentro da célula: seta maior e centralizada */
+.cell .sym {
+  display: inline-block;
+  font-size: 22px;        /* tamanho maior para a seta */
+  line-height: 1;
+  text-align: center;
+  width: 100%;
+}
+
+/* deixa as funções mais afastadas da sequência */
+.sequence-area {
+  margin-top: 12px; /* separa a área de execução do board */
+}
+
+/* separa o título "Funções" da primeira função e afasta a lista do topo */
+.functions-col { 
+  padding-top: 8px;
+}
+.functions-list {
+  margin-top: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* torna os slots de função mais visíveis e com espaçamento entre eles */
+.function .fn-slots {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+/* pequenos ajustes visuais para os botões de slot */
+.fn-slot {
+  min-width: 36px;
+  height: 36px;
+  border-radius: 6px;
+  border: 1px dashed rgba(0,0,0,0.08);
+  background: #fff;
+  cursor: pointer;
+  font-size: 18px;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}

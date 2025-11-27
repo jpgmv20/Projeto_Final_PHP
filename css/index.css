@@ -9,6 +9,7 @@
 :root{
   --brand-blue: #1da1f2;
   --brand-blue-dark: #0d95e8;
+  --brand-blue-ultra-dark: #000a22;
   --bg: #f5f8fa;
   --surface: #ffffff;
   --muted: #6b7280;
@@ -94,21 +95,21 @@ button { font: inherit; cursor: pointer; border: none; background: none; }
   * { transition: none !important; animation: none !important; }
 }
 
-/* ========== Header ========== */
+/* ========== Header (CORRIGIDO) ========== */
 /* Header base */
 .header {
   height: var(--header-height);
   background: var(--brand-blue);
   color: #fff;
   display: flex;
+  justify-content: center; /* centro sempre centralizado */
   align-items: center;
-  justify-content: space-between;
   padding: 0 var(--gap);
-  position: relative;
+  position: relative; /* referência para os absolutos internos */
   z-index: 1000;
 }
 
-/* Header fixo (quando usado) */
+/* Header fixo */
 .header.header--fixed {
   position: fixed;
   top: 0;
@@ -117,49 +118,71 @@ button { font: inherit; cursor: pointer; border: none; background: none; }
   box-shadow: var(--shadow);
 }
 
-/* Container interno do header */
+/* IMPORTANTO: NÃO usar o container como contexto de posicionamento.
+   Fazemos o container estático para que os absolutos se calculem em relação ao .header (viewport). */
 .header > .container {
-  display: flex;
-  align-items: center;
   width: 100%;
-  position: relative;
-  padding: 0;
+  height: 100%;
+  position: static; /* <- alterado: antes estava relative e centralizava left/right */
 }
 
-/* Layout do header: esquerda (logo), centro (busca), direita (ícones) */
-.header__left,
-.header__center,
-.header__right {
+/* --- LEFT (ancorado à borda da viewport) --- */
+.header__left {
+  position: absolute;
+  left: var(--gap);
+  top: 50%;
+  transform: translateY(-50%);
   display: flex;
   align-items: center;
   gap: var(--gap-sm);
+  z-index: 1003;
 }
 
-/* Esquerda e direita fixos (não crescem) */
-.header__left,
+/* --- RIGHT (ancorado à borda da viewport) --- */
 .header__right {
-  flex: 0 0 auto;
-  z-index: 1002;
+  position: absolute;
+  right: var(--gap);
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  gap: var(--gap-sm);
+  z-index: 1003;
 }
 
-/* Centro: posicionamento absoluto para ficar sempre no meio da tela */
+/* --- CENTER (sempre centralizado em relação ao .header/viewport) --- */
+/* max-width reserva espaço lateral para left/right (ajuste o 240px se precisar mais espaço) */
 .header__center {
   position: absolute;
   left: 50%;
-  transform: translateX(-50%);
+  top: 50%;
+  transform: translate(-50%, -50%);
   width: 100%;
-  max-width: 680px;
+  max-width: min(700px, calc(100% - 240px));
   display: flex;
   justify-content: center;
-  z-index: 1001;
   pointer-events: auto;
+  z-index: 1002;
+  padding: 0 8px;
+  box-sizing: border-box;
+  overflow: visible;
 }
 
-/* Se quiser que o centro não passe visualmente dos cantos, limitadores: */
+/* Evita deslocamento negativo que causava problemas */
 .header__center .search {
   width: 100%;
   padding: 0 12px;
+  margin-left: 0;
 }
+
+/* Proteção: quando o header for fixo, evita que o conteúdo fique sob ele.
+   Se preferir aplicar apenas em páginas específicas, troque para body.has-fixed-header { ... } */
+body {
+  padding-top: var(--header-height);
+  box-sizing: border-box;
+}
+
+/* Busca / logo / botões seguem inalterados (abaixo) */
 
 /* Logo */
 .header__brand {
@@ -171,7 +194,7 @@ button { font: inherit; cursor: pointer; border: none; background: none; }
   color: #fff;
 }
 
-/* Ícone opcional do logo */
+/* Marcador da logo */
 .header__brand .logo-mark {
   width: 34px;
   height: 34px;
@@ -184,6 +207,7 @@ button { font: inherit; cursor: pointer; border: none; background: none; }
   font-weight: 700;
 }
 
+
 /* Busca - container */
 .search {
   width: 100%;
@@ -191,7 +215,7 @@ button { font: inherit; cursor: pointer; border: none; background: none; }
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-left: -100px;
+  /* margin-left removido para evitar deslocamentos inesperados */
 }
 
 /* Envolve o input para ícone interno */
@@ -210,6 +234,7 @@ button { font: inherit; cursor: pointer; border: none; background: none; }
   color: #fff;
   font-size: 0.95rem;
   transition: background var(--fast), box-shadow var(--fast), border-color var(--fast);
+  box-sizing: border-box;
 }
 
 /* Placeholder */
@@ -275,8 +300,25 @@ button { font: inherit; cursor: pointer; border: none; background: none; }
   font-weight: 600;
   box-shadow: 0 2px 8px rgba(15,23,36,0.06);
   transition: transform var(--fast), box-shadow var(--fast);
+  cursor: pointer;
 }
 .btn:hover { transform: translateY(-2px); }
+
+/* Botão de register*/
+.btn--register {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--brand-blue-dark);
+  color: var(--text);
+  padding: 8px 12px;
+  border-radius: 999px;
+  font-weight: 600;
+  box-shadow: 0 2px 8px rgba(15,23,36,0.06);
+  transition: transform var(--fast), box-shadow var(--fast);
+  cursor: pointer;
+}
+.btn--register:hover { transform: translateY(-2px); }
 
 /* Avatar */
 .avatar {
@@ -288,6 +330,11 @@ button { font: inherit; cursor: pointer; border: none; background: none; }
 }
 
 /* ========= Responsividade ========= */
+@media (max-width: 1024px) {
+  /* quando a tela diminuir, reduzimos o espaço reservado para center */
+  .header__center { max-width: min(620px, calc(100% - 200px)); }
+}
+
 @media (max-width: 768px) {
   .header {
     padding: 0 12px;
@@ -299,15 +346,18 @@ button { font: inherit; cursor: pointer; border: none; background: none; }
     justify-content: space-between;
   }
 
+  /* no mobile, center vira estático dentro do fluxo para não sobrepor */
   .header__center {
     position: static;
     transform: none;
     max-width: calc(100% - 120px);
     margin: 0 8px;
+    z-index: 1000;
   }
 
   .search__input { font-size: 0.95rem; }
 
+  /* esconder o botão grande (Postar) em telas pequenas, você já tinha isso */
   .btn { display: none; }
 }
 
@@ -342,14 +392,26 @@ button { font: inherit; cursor: pointer; border: none; background: none; }
   color: var(--text);
 }
 
+/* ===== Ajustes específicos para o login (faz o card crescer e centraliza) ===== */
+.login-page .container {
+  /* permite que o conteúdo do login use maior largura que o container padrão */
+  max-width: none;        /* remove o limite global --max-width apenas nesta página */
+  width: 100%;
+  display: flex;
+  justify-content: center; /* centraliza o card horizontalmente */
+  padding-left: 24px;      /* evita colar nas bordas em telas pequenas */
+  padding-right: 24px;
+  box-sizing: border-box;
+}
+
 /* Card com destaque de marca no topo */
 .login-card {
   width: 100%;
-  max-width: 420px;
+  max-width: min(80vw, 820px);  /* ocupa até 80% da viewport, mas não passa 820px */
   background: var(--surface);
   border-radius: var(--radius);
   box-shadow: var(--shadow);
-  padding: 28px;
+  padding: 36px;              /* um pouco mais de espaço interno para "respirar" */
   border: 1px solid var(--border);
   display: flex;
   flex-direction: column;
@@ -408,6 +470,7 @@ button { font: inherit; cursor: pointer; border: none; background: none; }
 }
 
 /* Inputs: borda, foco e placeholder alinhados ao tema */
+/* corrigido: adicionei o .login-form antes de cada input selector */
 .login-form input[type="email"],
 .login-form input[type="password"],
 .login-form input[type="text"] {
@@ -489,6 +552,11 @@ button { font: inherit; cursor: pointer; border: none; background: none; }
 }
 
 /* Responsividade leve (agora com cores herdadas) */
+@media (max-width: 880px) {
+  .login-card { max-width: 92vw; padding: 28px; }
+  .login-page { padding: 30px 12px; }
+}
+
 @media (max-width: 480px) {
   .login-card {
     padding: 20px;
@@ -498,15 +566,16 @@ button { font: inherit; cursor: pointer; border: none; background: none; }
   .login-card .brand .logo-mark { width: 40px; height: 40px; font-size: 1rem; }
 }
 
+@media (max-width: 420px) {
+  .login-card { max-width: 98vw; padding: 18px; border-radius: 12px; }
+  .login-page { padding: 20px 8px; }
+}
+
 /* ===== Tema escuro — O site inteiro (incluindo login) herda apenas variáveis ===== */
 
 /* Para o login em modo escuro, NÃO redefinimos cores arbitrárias:
    apenas fazemos componentes usarem as variáveis já alteradas em body.theme-dark.
 */
-
-body.theme-dark {
-  /* as variáveis já foram definidas no topo; nada extra aqui é necessário */
-}
 
 /* Fundo do login no dark usa o bg puro (sem o acento do claro) */
 body.theme-dark .login-page {

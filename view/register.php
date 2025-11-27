@@ -1,8 +1,3 @@
-<?php
-require_once __DIR__ . '/../services/config.php';
-define('IN_CREATE', true);
-?>
-
 <!doctype html>
 <html lang="pt-BR">
 
@@ -11,10 +6,10 @@ define('IN_CREATE', true);
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Register</title>
   <link rel="stylesheet" href="../css/index.css">
-  <script src="../js/register.js"></script>
+  <script src="../js/register.js" defer></script>
 </head>
 
-<body class="theme-dark">
+<body class="<?PHP $config = $_SESSION['config']['tema'] ?? ""; echo $config ?>">
 
   <main>
     <section class="login-page" aria-labelledby="login-title">
@@ -30,19 +25,24 @@ define('IN_CREATE', true);
             </div>
           </div>
 
-          <form class="login-form" action="#" method="post" onsubmit="event.preventDefault(); alert('Formulário enviado');">
+          <form class="login-form" action="../controller/controller_register.php" method="post" enctype="multipart/form-data">
 
             <div class="avatar-container">
-                <input type="file" id="avatar_input" name="avatar_file" accept="image/*" hidden>
+              <!-- Alem de ter que ajeitar o do avatar, seta o input com type file com a imagem carregada pra poder pegar no php -->
+                <input type="hidden" name="MAX_FILE_SIZE" value="99999999"/>
+
+                <input type="file" id="avatar_input" name="avatar" accept="image/*" hidden>
                 <input type="url" id="avatar_url" name="avatar_url" placeholder="Ou insira uma URL da web" class="avatar-url-input" hidden>
+
 
                 <div class="avatar-circle" onclick="openAvatarOptions()">
                     <img id="avatar_preview"
-                        src="<?= BASE_URL ?>/img/avatar-placeholder.png"
+                        src="../image/images.jfif"
                         alt="avatar">
                 </div>
 
                 <div class="avatar-buttons">
+                  <!-- Me diz que posso trocar isso por um input type hidden -->
                     <button type="button" onclick="chooseFile()">Upload</button>
                     <button type="button" onclick="enterUrl()">URL</button>
                 </div>
@@ -67,13 +67,7 @@ define('IN_CREATE', true);
               <label for="password">Confimar senha</label>
               <input id="passwordConfirm" name="passwordConfirm" type="password" placeholder="••••••••" required>
             </div>
-
-            <div class="form-row">
-              <label class="remember">
-                <input type="checkbox" name="remember"> Lembrar-me
-              </label>
-            </div>
-
+            
             <div class="login-actions">
               <button class="btn--primary" type="submit">Criar</button>
               <a class="btn--link" href="login.php">Login</a>
@@ -83,8 +77,8 @@ define('IN_CREATE', true);
       </div>
     </section>
   </main>
+  <?php include_once('../footer.php');?>
 </body>
 </html>
 
 
-<?php include __DIR__ . '/../footer.php';?>
