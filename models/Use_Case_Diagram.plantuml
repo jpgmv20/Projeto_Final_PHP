@@ -1,0 +1,19 @@
+@startuml Robozllue_UseCases
+left to right direction
+actor Player
+
+rectangle "Robozllue" {
+  Player -- (Play Level)
+  Player -- (Login / Register)
+  (Login / Register) -- (Create / Edit Level)
+  (Login / Register) -- (Like / Comment / Share)
+  Player -- (Profile / Messages)
+  (Play Level) --> (Request execution)
+  (Login / Register) --> (Request execution)
+  (Request execution) ..> (Execution Engine) : triggers
+}
+
+package "Backend" {
+  (Execution Engine) --> (Database)
+}
+@enduml

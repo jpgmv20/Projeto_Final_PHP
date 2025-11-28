@@ -1,0 +1,46 @@
+@startuml Robozllue_Sequencia_PTBR
+autonumber "Passo ##: "
+
+participant Jogador as "Jogador"
+participant Frontend as "Frontend (UI)"
+participant API as "API / Backend"
+participant Engine as "Engine de Execução"
+participant Estado as "Estado do Jogo"
+participant DB as "Banco de Dados"
+
+Jogador -> Frontend : Enviar programa (level_id, sequência)
+Frontend -> API : POST /levels/{id}/run (programa)
+API -> Engine : Enfileirar / Executar(programa, nível)
+
+Engine -> Estado : clonar(estado_inicial)
+note right of Engine
+  Engine inicia pilha de chamadas
+  e simula passos/ticks
+end note
+
+loop Para cada função na sequência
+  Engine -> Estado : pushCall(func)
+end
+
+loop Simular ticks (até maxTotalSteps ou objetivo)
+  Estado -> Estado : aplicarComando(cmd)
+  Engine -> Estado : verificarObjetivo()
+  alt Objetivo alcançado
+    Engine -> DB : salvarRun(level_id, program_id, user_id, "success", passos, comando_vitoria)
+    Engine -> API : retornar {resultado: sucesso, passos, comando_vitoria}
+    API -> Frontend : retornar resultado (sucesso)
+    Frontend -> Jogador : mostrar sucesso / replay
+    break
+  else Continua
+    note over Engine,Estado : incrementar contador de passos\n(verifica limites e detecção de loop)
+  end
+end
+
+alt Timeout ou falha
+  Engine -> DB : salvarRun(level_id, program_id, user_id, "timeout/failure", passos)
+  Engine -> API : retornar {resultado: timeout/failure, passos}
+  API -> Frontend : retornar resultado (falha/timeout)
+  Frontend -> Jogador : mostrar falha / mensagem
+end
+
+@enduml

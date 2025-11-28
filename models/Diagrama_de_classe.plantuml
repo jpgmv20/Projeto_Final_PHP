@@ -1,0 +1,168 @@
+@startuml Robozllue_Classes
+
+' ========================
+'        USER
+' ========================
+class User {
+  +id: Long
+  +nome: String
+  +descricao: String
+  +email: String
+  +password_hash: String
+  +avatar_url: String
+  +config: JSON
+  +created_at: Timestamp
+  +updated_at: Timestamp
+
+  +follow(userId: Long)
+  +unfollow(userId: Long)
+  +likeLevel(levelId: Long)
+  +comment(levelId: Long, text: String)
+}
+
+' ========================
+'        LEVEL
+' ========================
+class Level {
+  +id: Long
+  +author_id: Long
+  +title: String
+  +descricao: Text
+  +difficulty: String
+  +published: Boolean
+  +level_json: JSON
+  +created_at: Timestamp
+  +updated_at: Timestamp
+
+  +publish()
+  +validate(): Boolean
+  +getFunctions(): List<FunctionBlock>
+  +getObjective(): JSON
+}
+
+' ========================
+'     FUNCTION BLOCK
+' ========================
+class FunctionBlock {
+  +id: Long
+  +level_id: Long
+  +name: String
+  +commands: JSON
+  +max_slots: Int
+
+  +addCommand(json: String)
+  +removeCommand(index: Int)
+  +validate(): Boolean
+}
+
+' ========================
+'        PROGRAM
+' ========================
+class Program {
+  +id: Long
+  +level_id: Long
+  +owner_id: Long
+  +sequence: JSON
+  +created_at: Timestamp
+  +updated_at: Timestamp
+
+  +addFunctionBlock(name: String)
+  +removeFunctionBlock(index: Int)
+  +validate(level: Level): Boolean
+}
+
+' ========================
+'          RUN
+' ========================
+class Run {
+  +id: Long
+  +level_id: Long
+  +program_id: Long
+  +user_id: Long
+  +result: Enum
+  +steps_used: Int
+  +victory_command: String
+  +created_at: Timestamp
+
+  +logStep(state: GameState)
+  +finish(result: Enum)
+}
+
+' ========================
+'     COMMENTS & LIKES
+' ========================
+class Comment {
+  +id: Long
+  +level_id: Long
+  +user_id: Long
+  +text: Text
+  +created_at: Timestamp
+  +updated_at: Timestamp
+}
+
+class Like {
+  +user_id: Long
+  +level_id: Long
+  +created_at: Timestamp
+}
+
+class Follower {
+  +follower_id: Long
+  +user_id: Long
+  +created_at: Timestamp
+}
+
+' ========================
+'       GAME STATE
+' ========================
+class GameState {
+  +grid: JSON
+  +player_pos: String
+  +items: JSON
+  +tick: Int
+
+  +clone(): GameState
+  +applyCommand(cmd: String)
+  +objectiveMet(obj: JSON): Boolean
+}
+
+' ========================
+'    EXECUTION ENGINE
+' ========================
+class ExecutionEngine {
+  +maxTotalSteps: Int
+  +maxCallDepth: Int
+
+  +executeProgram(level: Level, program: Program): RunResult
+  +applyCommand(state: GameState, cmd: String): GameState
+  +pushCall(stack: List, func: String)
+  +popCall(stack: List)
+}
+
+class RunResult {
+  +result: Enum
+  +steps: Int
+  +trace: JSON
+}
+
+' ========================
+'        RELAÇÕES
+' ========================
+User "1" -- "0..*" Level : author
+Level "1" -- "0..*" FunctionBlock
+Level "1" -- "0..*" Program
+Program "0..*" -- "0..*" Run
+User "1" -- "0..*" Program : owns
+User "1" -- "0..*" Run
+Level "1" -- "0..*" Run
+Level "1" -- "0..*" Comment
+User "1" -- "0..*" Comment
+User "1" -- "0..*" Like
+Level "1" -- "0..*" Like
+User "1" -- "0..*" Follower
+
+ExecutionEngine ..> GameState
+ExecutionEngine --> RunResult
+ExecutionEngine --> Run
+
+@enduml
