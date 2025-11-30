@@ -1,0 +1,55 @@
+2025-11-30 09:25:29 === request start ===
+2025-11-30 09:25:29 REQUEST_METHOD=GET
+2025-11-30 09:25:29 _POST=[]
+2025-11-30 09:25:29 _SESSION_id=1
+2025-11-30 09:25:29 Not POST -> redirect to index
+2025-11-30 09:25:33 === request start ===
+2025-11-30 09:25:33 REQUEST_METHOD=GET
+2025-11-30 09:25:33 _POST=[]
+2025-11-30 09:25:33 _SESSION_id=1
+2025-11-30 09:25:33 Not POST -> redirect to index
+2025-11-30 09:25:34 === request start ===
+2025-11-30 09:25:34 REQUEST_METHOD=GET
+2025-11-30 09:25:34 _POST=[]
+2025-11-30 09:25:34 _SESSION_id=1
+2025-11-30 09:25:34 Not POST -> redirect to index
+2025-11-30 09:25:35 === request start ===
+2025-11-30 09:25:35 REQUEST_METHOD=GET
+2025-11-30 09:25:35 _POST=[]
+2025-11-30 09:25:35 _SESSION_id=1
+2025-11-30 09:25:35 Not POST -> redirect to index
+2025-11-30 09:25:35 === request start ===
+2025-11-30 09:25:35 REQUEST_METHOD=GET
+2025-11-30 09:25:35 _POST=[]
+2025-11-30 09:25:35 _SESSION_id=1
+2025-11-30 09:25:35 Not POST -> redirect to index
+2025-11-30 09:25:36 === request start ===
+2025-11-30 09:25:36 REQUEST_METHOD=GET
+2025-11-30 09:25:36 _POST=[]
+2025-11-30 09:25:36 _SESSION_id=1
+2025-11-30 09:25:36 Not POST -> redirect to index
+2025-11-30 09:25:37 === request start ===
+2025-11-30 09:25:37 REQUEST_METHOD=GET
+2025-11-30 09:25:37 _POST=[]
+2025-11-30 09:25:37 _SESSION_id=1
+2025-11-30 09:25:37 Not POST -> redirect to index
+2025-11-30 09:26:13 === request start ===
+2025-11-30 09:26:13 REQUEST_METHOD=GET
+2025-11-30 09:26:13 _POST=[]
+2025-11-30 09:26:13 _SESSION_id=1
+2025-11-30 09:26:13 Not POST -> redirect to index
+2025-11-30 09:26:15 === request start ===
+2025-11-30 09:26:15 REQUEST_METHOD=GET
+2025-11-30 09:26:15 _POST=[]
+2025-11-30 09:26:15 _SESSION_id=1
+2025-11-30 09:26:15 Not POST -> redirect to index
+2025-11-30 09:41:24 === request start ===
+2025-11-30 09:41:24 REQUEST_METHOD=POST
+2025-11-30 09:41:24 _POST={"title":"teste","difficulty":"easy","select_level":"{\"title\":\"teste\",\"difficulty\":\"easy\",\"grid_cell_size\":48,\"matrix\":[[{\"color\":\"none\",\"symbol\":\"none\"},{\"color\":\"none\",\"symbol\":\"none\"},{\"color\":\"none\",\"symbol\":\"none\"},{\"color\":\"none\",\"symbol\":\"none\"},{\"color\":\"none\",\"symbol\":\"none\"}],[{\"color\":\"none\",\"symbol\":\"none\"},{\"color\":\"none\",\"symbol\":\"none\"},{\"color\":\"none\",\"symbol\":\"none\"},{\"color\":\"none\",\"symbol\":\"none\"},{\"color\":\"none\",\"symbol\":\"none\"}],[{\"color\":\"blue\",\"symbol\":\"play\"},{\"color\":\"blue\",\"symbol\":\"none\"},{\"color\":\"blue\",\"symbol\":\"none\"},{\"color\":\"blue\",\"symbol\":\"none\"},{\"color\":\"red\",\"symbol\":\"none\"}],[{\"color\":\"none\",\"symbol\":\"none\"},{\"color\":\"none\",\"symbol\":\"none\"},{\"color\":\"none\",\"symbol\":\"none\"},{\"color\":\"none\",\"symbol\":\"none\"},{\"color\":\"blue\",\"symbol\":\"star\"}],[{\"color\":\"none\",\"symbol\":\"none\"},{\"color\":\"none\",\"symbol\":\"none\"},{\"color\":\"none\",\"symbol\":\"none\"},{\"color\":\"none\",\"symbol\":\"none\"},{\"color\":\"none\",\"symbol\":\"none\"}]],\"functions\":[{\"name\":\"F0\",\"size\":5},{\"name\":\"F1\",\"size\":3}]}","action":"publish"}
+2025-11-30 09:41:24 _SESSION_id=1
+2025-11-30 09:41:43 Success: level created by user 1
+2025-11-30 09:45:06 === request start ===
+2025-11-30 09:45:06 REQUEST_METHOD=POST
+2025-11-30 09:45:06 _POST={"title":"teste 2","difficulty":"easy","select_level":"{\"title\":\"Nova Fase\",\"difficulty\":\"easy\",\"grid_cell_size\":48,\"matrix\":[[{\"color\":\"none\",\"symbol\":\"none\"},{\"color\":\"none\",\"symbol\":\"none\"},{\"color\":\"none\",\"symbol\":\"none\"},{\"color\":\"none\",\"symbol\":\"none\"},{\"color\":\"none\",\"symbol\":\"none\"}],[{\"color\":\"none\",\"symbol\":\"none\"},{\"color\":\"none\",\"symbol\":\"none\"},{\"color\":\"none\",\"symbol\":\"none\"},{\"color\":\"none\",\"symbol\":\"none\"},{\"color\":\"none\",\"symbol\":\"none\"}],[{\"color\":\"blue\",\"symbol\":\"play\"},{\"color\":\"blue\",\"symbol\":\"none\"},{\"color\":\"blue\",\"symbol\":\"none\"},{\"color\":\"blue\",\"symbol\":\"none\"},{\"color\":\"blue\",\"symbol\":\"star\"}],[{\"color\":\"none\",\"symbol\":\"none\"},{\"color\":\"none\",\"symbol\":\"none\"},{\"color\":\"none\",\"symbol\":\"none\"},{\"color\":\"none\",\"symbol\":\"none\"},{\"color\":\"none\",\"symbol\":\"none\"}],[{\"color\":\"none\",\"symbol\":\"none\"},{\"color\":\"none\",\"symbol\":\"none\"},{\"color\":\"none\",\"symbol\":\"none\"},{\"color\":\"none\",\"symbol\":\"none\"},{\"color\":\"none\",\"symbol\":\"none\"}]],\"functions\":[{\"name\":\"F0\",\"size\":5},{\"name\":\"F1\",\"size\":3}]}","action":"publish"}
+2025-11-30 09:45:06 _SESSION_id=1
+2025-11-30 09:45:06 Success: level created by user 1

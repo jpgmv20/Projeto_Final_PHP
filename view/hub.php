@@ -1,45 +1,38 @@
 <?php
+require_once __DIR__ . '/../services/config.php';
 session_start();
 
-/*
- hub.php - Hub de conversas integrado ao DB 'robozzle'
- - Versão com busca por nome/email adaptada à sua tabela users (coluna 'nome')
- - Cria tabelas de conversa se necessário, abre/cria conversas privadas,
-   envia mensagens (upload de imagem), marca leitura e lista conversas.
- - Ajuste DB_* no topo conforme seu ambiente (XAMPP padrão: root, senha vazia)
-*/
-
-/* ---------------- DATABASE CONFIG - ajuste conforme o seu ambiente ---------------- */
-define('DB_HOST', '127.0.0.1');
-define('DB_NAME', 'robozzle');
-define('DB_USER', 'root');
-define('DB_PASS', '');         // coloque sua senha do MySQL aqui
-define('DB_CHARSET', 'utf8mb4');
-
-/* ---------------- UPLOAD / ENV ---------------- */
-$uploadsDir = __DIR__ . '/uploads_messages';
-$uploadsWebPath = 'uploads_messages';
-$maxFileSize = 2 * 1024 * 1024; // 2MB
-$allowedMimes = ['image/jpeg','image/png','image/gif'];
-
-/* ---------------- PDO CONNECTION ---------------- */
-$dsn = "mysql:host=" . DB_HOST . ";dbname=" . DB_NAME . ";charset=" . DB_CHARSET;
-$options = [
-    PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
-    PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-    PDO::ATTR_EMULATE_PREPARES => false,
-];
-
-try {
-    $pdo = new PDO($dsn, DB_USER, DB_PASS, $options);
-} catch (Throwable $e) {
-    die("Erro ao conectar ao banco de dados: " . htmlspecialchars($e->getMessage()));
+/* ---------- redireciona se não estiver logado (proteção contra acesso por URL) ---------- */
+if (empty($_SESSION['id'])) {
+    header('Location: ../index.php');
+    exit;
 }
 
-/* ---------------- CREATE TABLES SAFELY (no defaults for JSON) ----------------
-   Essas CREATEs são idempotentes (IF NOT EXISTS).
-*/
-$pdo->exec("
+/* ---------------- avatar helper (adaptado do seu exemplo) ---------------- */
+if (!function_exists('avatar_url_web')) {
+    function avatar_url_web(string $path = ''): string {
+        $default = 'image/images.jfif';
+        if (empty($path)) {
+            return 'http://' . $_SERVER['HTTP_HOST'] . '/Projeto_Final_PHP/' . $default;
+        }
+        if (preg_match('#^https?://#i', $path)) {
+            return $path;
+        }
+        $p = ltrim($path, '/');
+        $p = preg_replace('#^(?:Projeto_Final_PHP/)+#i', '', $p);
+        return 'http://' . $_SERVER['HTTP_HOST'] . '/Projeto_Final_PHP/' . $p;
+    }
+}
+
+/* ---------------- mysqli CONNECTION (usa connect_mysql()) ---------------- */
+$mysqli = connect_mysql();
+if (!$mysqli || $mysqli->connect_errno) {
+    die("Erro ao conectar ao banco de dados: " . ($mysqli->connect_error ?? 'unknown'));
+}
+$mysqli->set_charset('utf8mb4');
+
+/* ---------------- CREATE TABLES (idempotente) ---------------- */
+$mysqli->query("
 CREATE TABLE IF NOT EXISTS conversations (
   id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   type ENUM('private','group') NOT NULL DEFAULT 'private',
@@ -48,8 +41,7 @@ CREATE TABLE IF NOT EXISTS conversations (
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 ");
-
-$pdo->exec("
+$mysqli->query("
 CREATE TABLE IF NOT EXISTS conversation_participants (
   conversation_id BIGINT UNSIGNED NOT NULL,
   user_id BIGINT UNSIGNED NOT NULL,
@@ -60,15 +52,12 @@ CREATE TABLE IF NOT EXISTS conversation_participants (
   CONSTRAINT fk_conv_part_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 ");
-
-/* IMPORTANT: read_by is JSON but we DO NOT set a DEFAULT value (MySQL forbids default on JSON/TEXT/BLOB) */
-$pdo->exec("
+$mysqli->query("
 CREATE TABLE IF NOT EXISTS conversation_messages (
   id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   conversation_id BIGINT UNSIGNED NOT NULL,
   sender_id BIGINT UNSIGNED NOT NULL,
   content TEXT NULL,
-  attachment VARCHAR(1024) DEFAULT NULL,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   read_by JSON NULL,
   CONSTRAINT fk_msg_conv FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE,
@@ -76,64 +65,43 @@ CREATE TABLE IF NOT EXISTS conversation_messages (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 ");
 
-/* ---------------- ensure uploads dir ---------------- */
-if (!is_dir($uploadsDir)) {
-    mkdir($uploadsDir, 0755, true);
-}
-
-/* ---------------- helper escape ---------------- */
+/* ---------------- helpers ---------------- */
 function e($s){ return htmlspecialchars($s ?? '', ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); }
 
-/* ---------------- current user (fallback DEV) ----------------
-   Em produção, remova o fallback e use sua lógica de autenticação (session).
-*/
-if (empty($_SESSION['id'])) {
-    $row = $pdo->query("SELECT id, nome FROM users LIMIT 1")->fetch();
-    if ($row) {
-        $_SESSION['id'] = (int)$row['id'];
-        $_SESSION['nome'] = $row['nome'];
-    } else {
-        die("Nenhum usuário encontrado no banco. Crie ao menos um registro em users.");
-    }
-}
+/* ---------------- current user (usando sessão existente) ---------------- */
 $currentUserId = (int)$_SESSION['id'];
+$currentUserName = $_SESSION['nome'] ?? 'Usuário';
+$currentUserAvatar = avatar_url_web($_SESSION['avatar_url'] ?? '');
 
-/* ---------------- small helper: get user suggestions (top 5) ----------------
-   - If $query === '' we return the first $limit users (excluding current user).
-   - If $query is non-empty, we search nome OR email and return up to $limit matches.
-*/
-function get_user_suggestions(PDO $pdo, ?string $query, int $limit = 5, int $exclude_user_id = 0) {
-    if ($query === null) return [];
-    $query = trim($query);
-    if ($query === '') {
-        // top users (by created_at) to be suggestions
-        $sql = "SELECT id, nome, avatar_url, email FROM users WHERE id != ? ORDER BY created_at ASC LIMIT ?";
-        $q = $pdo->prepare($sql);
-        $q->execute([$exclude_user_id, $limit]);
-        return $q->fetchAll();
-    } else {
-        $like = '%' . $query . '%';
-        $sql = "SELECT id, nome, avatar_url, email
-                FROM users
-                WHERE (nome LIKE ? OR email LIKE ?) AND id != ?
-                ORDER BY nome
-                LIMIT ?";
-        $q = $pdo->prepare($sql);
-        $q->execute([$like, $like, $exclude_user_id, $limit]);
-        return $q->fetchAll();
-    }
+/* ---------------- get_user_suggestions (comportamento: não retorna 5 primeiros se vazio) ---------------- */
+function get_user_suggestions(mysqli $mysqli, ?string $query, int $limit = 10, int $exclude_user_id = 0) {
+    $out = [];
+    if ($query === null) return $out;
+    $q = trim($query);
+    if ($q === '') return $out; // comportamento removido conforme solicitado
+    $like = '%' . $q . '%';
+    $stmt = $mysqli->prepare("SELECT id, nome, avatar_url, email FROM users WHERE (nome LIKE ? OR email LIKE ?) AND id != ? ORDER BY nome LIMIT ?");
+    if (!$stmt) return $out;
+    $stmt->bind_param('ssis', $like, $like, $exclude_user_id, $limit);
+    $stmt->execute();
+    $res = $stmt->get_result();
+    while ($r = $res->fetch_assoc()) $out[] = $r;
+    $stmt->close();
+    return $out;
 }
 
-/* ---------------- HANDLE start conversation with user (from search results) ---------------- */
+/* ---------------- start conversation helper ---------------- */
 if (isset($_GET['start_conversation_with'])) {
     $otherId = (int)$_GET['start_conversation_with'];
     if ($otherId && $otherId !== $currentUserId) {
-        $u = $pdo->prepare("SELECT id, nome FROM users WHERE id = ?");
-        $u->execute([$otherId]);
-        $other = $u->fetch();
+        $stmt = $mysqli->prepare("SELECT id FROM users WHERE id = ?");
+        $stmt->bind_param('i', $otherId);
+        $stmt->execute();
+        $res = $stmt->get_result();
+        $other = $res->fetch_assoc();
+        $stmt->close();
         if ($other) {
-            // busca conversa privada existente entre os dois
-            $q = $pdo->prepare("
+            $q = $mysqli->prepare("
                 SELECT c.id
                 FROM conversations c
                 JOIN conversation_participants p1 ON p1.conversation_id = c.id AND p1.user_id = ?
@@ -141,20 +109,24 @@ if (isset($_GET['start_conversation_with'])) {
                 WHERE c.type = 'private'
                 LIMIT 1
             ");
-            $q->execute([$currentUserId, $otherId]);
-            $found = $q->fetchColumn();
-            if ($found) {
-                header("Location: ?conversation_id=" . (int)$found);
+            $q->bind_param('ii', $currentUserId, $otherId);
+            $q->execute();
+            $res2 = $q->get_result();
+            $found = $res2->fetch_row();
+            $q->close();
+            if ($found && isset($found[0])) {
+                header("Location: ?conversation_id=" . (int)$found[0]);
                 exit;
             } else {
-                // cria conversa privada e adiciona participantes
-                $pdo->beginTransaction();
-                $pdo->prepare("INSERT INTO conversations (type, title) VALUES ('private', NULL)")->execute();
-                $convId = (int)$pdo->lastInsertId();
-                $ins = $pdo->prepare("INSERT INTO conversation_participants (conversation_id, user_id) VALUES (?, ?)");
-                $ins->execute([$convId, $currentUserId]);
-                $ins->execute([$convId, $otherId]);
-                $pdo->commit();
+                $mysqli->begin_transaction();
+                $mysqli->query("INSERT INTO conversations (type, title) VALUES ('private', NULL)");
+                $convId = (int)$mysqli->insert_id;
+                $ins = $mysqli->prepare("INSERT INTO conversation_participants (conversation_id, user_id) VALUES (?, ?)");
+                $ins->bind_param('ii', $convId, $userIdBind);
+                $userIdBind = $currentUserId; $ins->execute();
+                $userIdBind = $otherId; $ins->execute();
+                $ins->close();
+                $mysqli->commit();
                 header("Location: ?conversation_id=" . $convId);
                 exit;
             }
@@ -162,63 +134,193 @@ if (isset($_GET['start_conversation_with'])) {
     }
 }
 
-/* ---------------- HANDLE SEND MESSAGE ---------------- */
+/* ---------------- HANDLE SEND MESSAGE (APENAS TEXTO) ---------------- */
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'send') {
     $convId = (int)($_POST['conversation_id'] ?? 0);
     $content = trim($_POST['content'] ?? '');
-
-    $attachmentPath = null;
-    if (!empty($_FILES['attachment']) && $_FILES['attachment']['error'] !== UPLOAD_ERR_NO_FILE) {
-        $file = $_FILES['attachment'];
-        if ($file['error'] === UPLOAD_ERR_OK && $file['size'] <= $maxFileSize) {
-            $finfo = new finfo(FILEINFO_MIME_TYPE);
-            $mime = $finfo->file($file['tmp_name']);
-            if (in_array($mime, $allowedMimes, true)) {
-                $ext = ($mime === 'image/png') ? 'png' : (($mime === 'image/gif') ? 'gif' : 'jpg');
-                $fn = bin2hex(random_bytes(8)) . '.' . $ext;
-                $target = $uploadsDir . '/' . $fn;
-                if (move_uploaded_file($file['tmp_name'], $target)) {
-                    $attachmentPath = $uploadsWebPath . '/' . $fn;
-                }
-            }
-        }
-    }
-
-    if ($content === '' && $attachmentPath === null) {
-        $_SESSION['flash_error'] = "Escreva uma mensagem ou envie um arquivo.";
+    if ($content === '') {
+        $_SESSION['flash_error'] = "Escreva uma mensagem.";
         header("Location: " . $_SERVER['REQUEST_URI']);
         exit;
     }
 
-    // Insere mensagem. Para read_by usamos JSON_ARRAY(?) para inicializar com o remetente já marcado.
-    $pdo->beginTransaction();
-    $stmt = $pdo->prepare("INSERT INTO conversation_messages (conversation_id, sender_id, content, attachment, read_by) VALUES (?, ?, ?, ?, JSON_ARRAY(?))");
-    $stmt->execute([$convId, $currentUserId, $content ?: null, $attachmentPath, (string)$currentUserId]);
-
-    // atualiza last_message_at em conversations
-    $pdo->prepare("UPDATE conversations SET last_message_at = CURRENT_TIMESTAMP WHERE id = ?")->execute([$convId]);
-    $pdo->commit();
+    $mysqli->begin_transaction();
+    $stmt = $mysqli->prepare("INSERT INTO conversation_messages (conversation_id, sender_id, content, read_by) VALUES (?, ?, ?, JSON_ARRAY(?))");
+    $curStr = (string)$currentUserId;
+    $stmt->bind_param('iiss', $convId, $currentUserId, $content, $curStr);
+    $stmt->execute();
+    $stmt->close();
+    $mysqli->query("UPDATE conversations SET last_message_at = CURRENT_TIMESTAMP WHERE id = " . (int)$convId);
+    $mysqli->commit();
 
     $_SESSION['flash_success'] = "Mensagem enviada.";
     header("Location: " . preg_replace('/#.*/','', $_SERVER['REQUEST_URI']) . "#conv-$convId");
     exit;
 }
 
-/* ---------------- USER SEARCH (left-side search bar) ----------------
-   Agora usa get_user_suggestions() e traz até 5 resultados.
-   Se `user_search` estiver presente na URL (mesmo que vazio), mostramos sugestões.
-*/
-$userSearch = isset($_GET['user_search']) ? trim($_GET['user_search']) : null;
-$userResults = [];
-if ($userSearch !== null) {
-    // traz até 5 resultados (se vazio, retorna os 5 primeiros usuários)
-    $userResults = get_user_suggestions($pdo, $userSearch, 5, $currentUserId);
+/* ---------------- AJAX endpoints (com checagens de isset) ---------------- */
+if (isset($_GET['ajax'])) {
+    header('Content-Type: application/json; charset=utf-8');
+    $ajax = $_GET['ajax'];
+
+    if ($ajax === 'conversations') {
+        $sql = "
+        SELECT
+          c.id AS convo_id,
+          c.title,
+          m.content AS last_content,
+          m.created_at AS last_created_at,
+          c.last_message_at
+        FROM conversations c
+        LEFT JOIN conversation_messages m
+          ON m.id = (
+            SELECT id
+            FROM conversation_messages
+            WHERE conversation_id = c.id
+            ORDER BY created_at DESC
+            LIMIT 1
+          )
+        WHERE EXISTS (SELECT 1 FROM conversation_participants cp WHERE cp.conversation_id = c.id AND cp.user_id = ?)
+        ORDER BY COALESCE(c.last_message_at, m.created_at) DESC
+        ";
+        $stmt = $mysqli->prepare($sql);
+        $stmt->bind_param('i', $currentUserId);
+        $stmt->execute();
+        $res = $stmt->get_result();
+        $convs = [];
+        while ($r = $res->fetch_assoc()) $convs[] = $r;
+        $stmt->close();
+
+        $out = [];
+        foreach ($convs as $c) {
+            $unread = (int)count_unread($mysqli, $c['convo_id'], $currentUserId);
+            $members = get_convo_members($mysqli, $c['convo_id']);
+            $title = $c['title'] ?: (count($members) ? $members[0]['nome'] : 'Chat');
+
+            $avatar = '';
+            if (count($members)) {
+                foreach ($members as $memb) {
+                    if ((int)$memb['id'] !== $currentUserId) {
+                        $avatar = avatar_url_web($memb['avatar_url'] ?? '');
+                        break;
+                    }
+                }
+                if ($avatar === '') $avatar = avatar_url_web($members[0]['avatar_url'] ?? '');
+            } else {
+                $avatar = avatar_url_web('');
+            }
+
+            $out[] = [
+                'convo_id' => (int)$c['convo_id'],
+                'title' => $title,
+                'preview' => $c['last_content'] ? mb_strimwidth($c['last_content'], 0, 60, '...') : 'Sem mensagens ainda',
+                'time' => $c['last_created_at'] ?? $c['last_message_at'],
+                'unread' => $unread,
+                'avatar' => $avatar,
+            ];
+        }
+
+        echo json_encode(['ok' => true, 'items' => $out], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+
+    if ($ajax === 'messages') {
+        $convId = isset($_GET['conversation_id']) ? (int)$_GET['conversation_id'] : 0;
+        if (!$convId) {
+            echo json_encode(['ok' => false, 'error' => 'conversation_id missing']);
+            exit;
+        }
+
+        $markSql = "UPDATE conversation_messages
+                    SET read_by = JSON_ARRAY_APPEND(COALESCE(read_by, JSON_ARRAY()), '$', CAST(? AS JSON))
+                    WHERE conversation_id = ? AND (JSON_CONTAINS(read_by, JSON_QUOTE(?)) = 0 OR read_by IS NULL)";
+        $markStmt = $mysqli->prepare($markSql);
+        $curStr = (string)$currentUserId;
+        $markStmt->bind_param('sis', $curStr, $convId, $curStr);
+        $markStmt->execute();
+        $markStmt->close();
+
+        $mstmt = $mysqli->prepare("SELECT cm.*, u.nome AS sender_name, u.avatar_url AS sender_avatar FROM conversation_messages cm LEFT JOIN users u ON u.id = cm.sender_id WHERE cm.conversation_id = ? ORDER BY cm.created_at ASC");
+        $mstmt->bind_param('i', $convId);
+        $mstmt->execute();
+        $mres = $mstmt->get_result();
+        $msgs = [];
+        while ($m = $mres->fetch_assoc()) {
+            $msgs[] = [
+                'id' => (int)$m['id'],
+                'sender_id' => (int)$m['sender_id'],
+                'sender_name' => $m['sender_name'],
+                'sender_avatar' => avatar_url_web($m['sender_avatar'] ?? ''),
+                'content' => $m['content'],
+                'created_at' => $m['created_at'],
+            ];
+        }
+        $mstmt->close();
+
+        echo json_encode(['ok' => true, 'messages' => $msgs], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+
+    if ($ajax === 'all_users') {
+        $q = $mysqli->prepare("SELECT id, nome, avatar_url, email FROM users WHERE id != ? ORDER BY nome");
+        $q->bind_param('i', $currentUserId);
+        $q->execute();
+        $r = $q->get_result();
+        $users = [];
+        while ($row = $r->fetch_assoc()) {
+            $users[] = [
+                'id' => (int)$row['id'],
+                'nome' => $row['nome'],
+                'email' => $row['email'],
+                'avatar' => avatar_url_web($row['avatar_url'] ?? '')
+            ];
+        }
+        $q->close();
+        echo json_encode(['ok' => true, 'users' => $users], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+
+    echo json_encode(['ok' => false, 'error' => 'unknown ajax']);
+    exit;
 }
 
-/* ---------------- FETCH CONVERSATIONS (where user participates) ----------------
-   Subselect pega última mensagem por conversa; ordenamos por último horário (c.last_message_at ou m.created_at).
-*/
-$sql = "
+/* ---------------- count_unread & get_convo_members ---------------- */
+function count_unread(mysqli $mysqli, $conversation_id, $user_id) {
+    $sql = "SELECT COUNT(*) as cnt FROM conversation_messages WHERE conversation_id = ? AND (JSON_CONTAINS(read_by, JSON_QUOTE(?)) = 0 OR read_by IS NULL) AND sender_id != ?";
+    $stmt = $mysqli->prepare($sql);
+    $u_str = (string)$user_id;
+    $stmt->bind_param('isi', $conversation_id, $u_str, $user_id);
+    $stmt->execute();
+    $res = $stmt->get_result();
+    $row = $res->fetch_assoc();
+    $stmt->close();
+    return (int)($row['cnt'] ?? 0);
+}
+
+function get_convo_members(mysqli $mysqli, $conversation_id) {
+    $q = $mysqli->prepare("SELECT u.id, u.nome, u.avatar_url FROM users u JOIN conversation_participants cp ON cp.user_id = u.id WHERE cp.conversation_id = ?");
+    $q->bind_param('i', $conversation_id);
+    $q->execute();
+    $res = $q->get_result();
+    $out = [];
+    while ($r = $res->fetch_assoc()) $out[] = $r;
+    $q->close();
+    return $out;
+}
+
+/* ---------------- simple time formatting ---------------- */
+function fmt_time($dt) {
+    if (!$dt) return '';
+    $t = strtotime($dt);
+    $diff = time() - $t;
+    if ($diff < 60) return $diff . 's';
+    if ($diff < 3600) return floor($diff/60) . 'm';
+    if ($diff < 86400) return floor($diff/3600) . 'h';
+    return date('d/m H:i', $t);
+}
+
+/* ---------------- Prepare initial page data (non-AJAX) ---------------- */
+$stmt = $mysqli->prepare("
 SELECT
   c.id AS convo_id,
   c.title,
@@ -234,72 +336,50 @@ LEFT JOIN conversation_messages m
     ORDER BY created_at DESC
     LIMIT 1
   )
-WHERE EXISTS (SELECT 1 FROM conversation_participants cp WHERE cp.conversation_id = c.id AND cp.user_id = :user_id)
+WHERE EXISTS (SELECT 1 FROM conversation_participants cp WHERE cp.conversation_id = c.id AND cp.user_id = ?)
 ORDER BY COALESCE(c.last_message_at, m.created_at) DESC
-";
-$stmt = $pdo->prepare($sql);
-stmt_execute:
-try {
-    $stmt->execute(['user_id' => $currentUserId]);
-} catch (Throwable $ex) {
-    // Em caso raro de erro, mostra mensagem e segue com lista vazia
-    error_log("Erro ao buscar conversas: " . $ex->getMessage());
-    $conversations = [];
-}
-if (!isset($conversations)) {
-    $conversations = $stmt->fetchAll();
+");
+$stmt->bind_param('i', $currentUserId);
+$stmt->execute();
+$res = $stmt->get_result();
+$conversations = [];
+while ($r = $res->fetch_assoc()) $conversations[] = $r;
+$stmt->close();
+
+$userSearch = isset($_GET['user_search']) ? trim($_GET['user_search']) : null;
+$userResults = [];
+if ($userSearch !== null && $userSearch !== '') {
+    $userResults = get_user_suggestions($mysqli, $userSearch, 10, $currentUserId);
 }
 
-/* ---------------- helper: count unread messages ----------------
-   Conta mensagens onde read_by NÃO contém o user_id e sender != user.
-*/
-function count_unread(PDO $pdo, $conversation_id, $user_id) {
-    $sql = "SELECT COUNT(*) FROM conversation_messages WHERE conversation_id = ? AND (JSON_CONTAINS(read_by, JSON_QUOTE(?)) = 0 OR read_by IS NULL) AND sender_id != ?";
-    $q = $pdo->prepare($sql);
-    $q->execute([$conversation_id, (string)$user_id, $user_id]);
-    return (int)$q->fetchColumn();
-}
-
-/* ---------------- SELECT CURRENT CONVERSATION & MESSAGES ---------------- */
 $currentConvId = isset($_GET['conversation_id']) ? (int)$_GET['conversation_id'] : (count($conversations) ? (int)$conversations[0]['convo_id'] : 0);
 $messages = [];
 $currentConv = null;
 if ($currentConvId) {
-    $q = $pdo->prepare("SELECT * FROM conversations WHERE id = ?");
-    $q->execute([$currentConvId]);
-    $currentConv = $q->fetch();
+    $q = $mysqli->prepare("SELECT * FROM conversations WHERE id = ?");
+    $q->bind_param('i', $currentConvId);
+    $q->execute();
+    $r = $q->get_result();
+    $currentConv = $r->fetch_assoc();
+    $q->close();
 
-    // marca mensagens como lidas por esse usuário (adiciona user_id no read_by JSON se ainda não estiver)
     $markSql = "UPDATE conversation_messages
                 SET read_by = JSON_ARRAY_APPEND(COALESCE(read_by, JSON_ARRAY()), '$', CAST(? AS JSON))
                 WHERE conversation_id = ? AND (JSON_CONTAINS(read_by, JSON_QUOTE(?)) = 0 OR read_by IS NULL)";
-    $pdo->prepare($markSql)->execute([(string)$currentUserId, $currentConvId, (string)$currentUserId]);
+    $markStmt = $mysqli->prepare($markSql);
+    $curStr = (string)$currentUserId;
+    $markStmt->bind_param('sis', $curStr, $currentConvId, $curStr);
+    $markStmt->execute();
+    $markStmt->close();
 
-    // fetch messages
-    $mstmt = $pdo->prepare("SELECT cm.*, u.nome AS sender_name FROM conversation_messages cm LEFT JOIN users u ON u.id = cm.sender_id WHERE cm.conversation_id = ? ORDER BY cm.created_at ASC");
-    $mstmt->execute([$currentConvId]);
-    $messages = $mstmt->fetchAll();
+    $mstmt = $mysqli->prepare("SELECT cm.*, u.nome AS sender_name, u.avatar_url AS sender_avatar FROM conversation_messages cm LEFT JOIN users u ON u.id = cm.sender_id WHERE cm.conversation_id = ? ORDER BY cm.created_at ASC");
+    $mstmt->bind_param('i', $currentConvId);
+    $mstmt->execute();
+    $mres = $mstmt->get_result();
+    while ($row = $mres->fetch_assoc()) $messages[] = $row;
+    $mstmt->close();
 }
 
-/* ---------------- get members of a conversation ---------------- */
-function get_convo_members(PDO $pdo, $conversation_id) {
-    $q = $pdo->prepare("SELECT u.id, u.nome, u.avatar_url FROM users u JOIN conversation_participants cp ON cp.user_id = u.id WHERE cp.conversation_id = ?");
-    $q->execute([$conversation_id]);
-    return $q->fetchAll();
-}
-
-/* ---------------- simple time formatting ---------------- */
-function fmt_time($dt) {
-    if (!$dt) return '';
-    $t = strtotime($dt);
-    $diff = time() - $t;
-    if ($diff < 60) return $diff . 's';
-    if ($diff < 3600) return floor($diff/60) . 'm';
-    if ($diff < 86400) return floor($diff/3600) . 'h';
-    return date('d/m H:i', $t);
-}
-
-/* flash */
 $flash_success = $_SESSION['flash_success'] ?? null;
 $flash_error = $_SESSION['flash_error'] ?? null;
 unset($_SESSION['flash_success'], $_SESSION['flash_error']);
@@ -312,18 +392,22 @@ unset($_SESSION['flash_success'], $_SESSION['flash_error']);
   <title>Hub de Conversas (robozzle)</title>
   <link rel="stylesheet" href="<?= 'http://' . $_SERVER['HTTP_HOST'] . '/Projeto_Final_PHP/css/hub.css' ?>">
   <style>
-    Pequeno CSS inline para garantir legibilidade mínima caso falte hub.css
     :root{--gap:12px;--muted:#7b8694}
     body{font-family:system-ui,Segoe UI,Roboto,Arial;margin:0;background:#f6f7fb;color:#0b1220}
     .chat-app{display:flex;height:100vh}
     .chats-list{width:320px;border-right:1px solid #e6e9ef;background:#fff;display:flex;flex-direction:column}
     .chats-header{padding:12px;border-bottom:1px solid #eee;display:flex;align-items:center;justify-content:space-between}
-    .chats-search{padding:8px;border-bottom:1px solid #f0f0f2}
-    .chats-search input{width:100%;padding:8px;border-radius:8px;border:1px solid #ddd}
-    .chats{overflow:auto;flex:1}
+    .chats-search{padding:8px;border-bottom:1px solid #f0f0f2;display:flex;gap:6px;align-items:center}
+    .chats-search input{flex:1;padding:8px;border-radius:8px;border:1px solid #ddd}
+    .chats-search .users-btn{padding:6px 8px;border-radius:8px;border:1px solid #ddd;background:#fff;cursor:pointer}
+    .users-dropdown{position:absolute;left:8px;top:64px;width:280px;background:#fff;border:1px solid #e6e9ef;border-radius:8px;box-shadow:0 8px 24px rgba(2,6,23,0.08);max-height:360px;overflow:auto;display:none;z-index:1500;padding:8px}
+    .users-dropdown .user-item{display:flex;gap:8px;padding:8px;border-radius:6px;align-items:center;text-decoration:none;color:inherit}
+    .users-dropdown .user-item:hover{background:#f3f7ff}
+    .chats{overflow:auto;flex:1;position:relative}
     .chat-item{display:flex;gap:8px;padding:10px;border-bottom:1px solid #f2f4f6;text-decoration:none;color:inherit}
     .chat-item.active{background:linear-gradient(90deg,#eef7ff,#fff)}
-    .chat-avatar,.avatar{width:40px;height:40px;border-radius:50%;background:#dfe9f9;color:#0b66b2;display:flex;align-items:center;justify-content:center;font-weight:700}
+    .chat-avatar,.avatar{width:40px;height:40px;border-radius:50%;background:#dfe9f9;color:#0b66b2;display:flex;align-items:center;justify-content:center;font-weight:700;overflow:hidden}
+    .chat-avatar img{width:100%;height:100%;object-fit:cover;display:block}
     .chat-body{flex:1}
     .chat-title{font-weight:700}
     .chat-preview{color:var(--muted);font-size:0.9rem}
@@ -338,42 +422,48 @@ unset($_SESSION['flash_success'], $_SESSION['flash_error']);
     .composer{display:flex;gap:8px;padding:12px;border-top:1px solid #eee;align-items:center}
     .composer textarea{flex:1;padding:10px;border-radius:8px;border:1px solid #ddd}
     .send-btn{background:#0b66b2;color:#fff;padding:10px 14px;border-radius:8px;border:none;cursor:pointer}
-    .file-label input{display:none}
   </style>
 </head>
-<body class="<?PHP $config = $_SESSION['config']['tema'] ?? ""; echo $config ?>">
+<body class="<?PHP $config = $_SESSION['config']['tema'] ?? ""; echo e($config) ?>">
   <div class="chat-app" role="application">
     <aside class="chats-list" aria-label="Conversas">
       <div class="chats-header">
         <h3 style="margin:0">Conversas</h3>
         <div style="display:flex;align-items:center;gap:8px">
-          <div class="avatar small"><?= e(strtoupper(substr($_SESSION['nome'] ?? '',0,1))); ?></div>
+          <!-- Avatar do usuário logado -->
+          <div class="avatar small" title="<?php echo e($currentUserName); ?>">
+            <img src="<?php echo e($currentUserAvatar); ?>" alt="avatar" style="width:100%;height:100%;object-fit:cover;display:block">
+          </div>
         </div>
       </div>
 
       <?php if ($flash_success): ?><div style="padding:8px;color:green"><?php echo e($flash_success); ?></div><?php endif; ?>
       <?php if ($flash_error): ?><div style="padding:8px;color:#b32039"><?php echo e($flash_error); ?></div><?php endif; ?>
 
-      <div class="chats-search">
-        <form method="get" action="">
-          <!-- se user_search está presente na URL (mesmo vazio), mostramos sugestões -->
+      <div class="chats-search" style="position:relative;">
+        <button class="users-btn" id="usersBtn" type="button" title="Lista de usuários">Lista de usuários</button>
+
+        <form id="searchForm" method="get" action="" style="display:flex;flex:1">
           <input type="search" id="chatSearch" name="user_search" placeholder="Procurar usuários (nome ou email)..." value="<?php echo e($userSearch ?? ''); ?>">
           <?php if ($userSearch !== null && $userSearch !== ''): ?>
             <a href="./" class="clear-search" title="Limpar" style="margin-left:8px">✖</a>
           <?php endif; ?>
         </form>
+
+        <div class="users-dropdown" id="usersDropdown" aria-hidden="true"></div>
       </div>
 
-      <nav class="chats" id="chatsNav">
+      <nav class="chats" id="chatsNav" aria-label="Lista de conversas">
         <?php
-          // Se o parâmetro user_search está presente (mesmo vazio), mostramos os userResults (máx 5).
-          if ($userSearch !== null):
+          if ($userSearch !== null && $userSearch !== ''):
             if (count($userResults) === 0): ?>
               <div style="padding:12px;color:var(--muted)">Nenhum usuário encontrado.</div>
             <?php endif;
             foreach ($userResults as $u): ?>
               <a class="chat-item user-result" href="?start_conversation_with=<?php echo (int)$u['id']; ?>">
-                <div class="chat-avatar"><?php echo e(strtoupper(substr($u['nome'] ?? 'U',0,1))); ?></div>
+                <div class="chat-avatar">
+                  <img src="<?php echo e(avatar_url_web($u['avatar_url'] ?? '')); ?>" alt="avatar">
+                </div>
                 <div class="chat-body">
                   <div class="chat-top">
                     <div class="chat-title"><?php echo e($u['nome']); ?></div>
@@ -386,15 +476,26 @@ unset($_SESSION['flash_success'], $_SESSION['flash_error']);
               </a>
             <?php endforeach;
           else:
-            // Sem busca ativa: mostramos as conversas normais
             foreach ($conversations as $c):
-              $unread = count_unread($pdo, $c['convo_id'], $currentUserId);
-              $members = get_convo_members($pdo, $c['convo_id']);
+              $unread = count_unread($mysqli, $c['convo_id'], $currentUserId);
+              $members = get_convo_members($mysqli, $c['convo_id']);
               $title = $c['title'] ?: (count($members) ? $members[0]['nome'] : 'Chat');
               $preview = $c['last_content'] ? mb_strimwidth($c['last_content'], 0, 60, '...') : 'Sem mensagens ainda';
+              $avatar = '';
+              if (count($members)) {
+                  foreach ($members as $memb) {
+                      if ((int)$memb['id'] !== $currentUserId) {
+                          $avatar = avatar_url_web($memb['avatar_url'] ?? '');
+                          break;
+                      }
+                  }
+                  if ($avatar === '') $avatar = avatar_url_web($members[0]['avatar_url'] ?? '');
+              } else {
+                  $avatar = avatar_url_web('');
+              }
         ?>
           <a class="chat-item<?php echo ($currentConvId === (int)$c['convo_id']) ? ' active' : ''; ?>" href="?conversation_id=<?php echo (int)$c['convo_id']; ?>#conv-<?php echo (int)$c['convo_id']; ?>" id="conv-<?php echo (int)$c['convo_id']; ?>">
-            <div class="chat-avatar"><?php echo e(strtoupper(substr($title,0,1))); ?></div>
+            <div class="chat-avatar"><img src="<?php echo e($avatar); ?>" alt="avatar"></div>
             <div class="chat-body">
               <div class="chat-top">
                 <div class="chat-title"><?php echo e($title); ?></div>
@@ -420,30 +521,60 @@ unset($_SESSION['flash_success'], $_SESSION['flash_error']);
         </div>
       <?php else: ?>
         <header class="panel-header">
-          <button class="back-btn" onclick="history.back()">← Voltar</button>
-          <div class="panel-title" style="display:flex;align-items:center;gap:12px">
-            <?php
-              $members = get_convo_members($pdo, $currentConvId);
-              $title = $currentConv['title'] ?: (count($members) ? $members[0]['nome'] : 'Chat');
-            ?>
-            <div class="avatar medium"><?php echo e(strtoupper(substr($title,0,1))); ?></div>
-            <div>
-              <div class="title" style="font-weight:700"><?php echo e($title); ?></div>
-              <div class="sub muted" style="font-size:0.9rem;color:var(--muted)"><?php echo count($members); ?> participante(s)</div>
-            </div>
-          </div>
-        </header>
+  <button class="back-btn" onclick="history.back()">← Voltar</button>
+  <div class="panel-title" style="display:flex;align-items:center;gap:12px">
+    <?php
+      // pega membros da conversa
+      $members = get_convo_members($mysqli, $currentConvId);
+
+      // tenta identificar o "outro" usuário (primeiro diferente do user logado)
+      $otherUser = null;
+      if (is_array($members) && count($members) > 0) {
+          foreach ($members as $memb) {
+              if ((int)$memb['id'] !== $currentUserId) {
+                  $otherUser = $memb;
+                  break;
+              }
+          }
+          // se não achou outro (p.ex. conversa consigo mesmo), pega o primeiro
+          if ($otherUser === null) {
+              $otherUser = $members[0];
+          }
+      }
+
+      // título: usa título da conversa, senão nome do outro usuário, senão 'Chat'
+      $title = $currentConv['title'] ?: ($otherUser['nome'] ?? 'Chat');
+
+      // avatar do outro usuário (normalizado)
+      $otherAvatarUrl = $otherUser['avatar_url'] ?? '';
+      $otherAvatarUrl = avatar_url_web($otherAvatarUrl);
+    ?>
+    <!-- mostra avatar do outro usuário; fallback para inicial se não existir -->
+    <div class="avatar medium" style="width:48px;height:48px;border-radius:8px;overflow:hidden;flex:0 0 auto;">
+      <?php if (!empty($otherUser['avatar_url'])): ?>
+        <img src="<?php echo e($otherAvatarUrl); ?>" alt="Avatar <?php echo e($otherUser['nome'] ?? ''); ?>" style="width:100%;height:100%;object-fit:cover;display:block">
+      <?php else: ?>
+        <div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:#dfe9f9;color:#0b66b2;font-weight:700;font-size:1.2rem;">
+          <?php echo e(strtoupper(substr(($otherUser['nome'] ?? $title), 0, 1))); ?>
+        </div>
+      <?php endif; ?>
+    </div>
+
+    <div>
+      <div class="title" style="font-weight:700"><?php echo e($title); ?></div>
+      <div class="sub muted" style="font-size:0.9rem;color:var(--muted)"><?php echo count($members); ?> participante(s)</div>
+    </div>
+  </div>
+</header>
+
 
         <section class="messages" id="messages">
           <?php foreach ($messages as $m):
               $isMe = ((int)$m['sender_id'] === $currentUserId);
           ?>
             <div class="message-row <?php echo $isMe ? 'me' : 'them'; ?>">
-              <?php if (!$isMe): ?><div class="msg-avatar"><?php echo e(strtoupper(substr($m['sender_name'] ?? 'U',0,1))); ?></div><?php endif; ?>
+              <?php if (!$isMe): ?><div class="msg-avatar"><img src="<?php echo e(avatar_url_web($m['sender_avatar'] ?? '')); ?>" alt="avatar" style="width:36px;height:36px;border-radius:50%;object-fit:cover"></div><?php endif; ?>
               <div class="msg-bubble">
-                <?php if (!empty($m['attachment'])): ?>
-                  <div class="msg-attachment" style="margin-bottom:8px"><img src="<?php echo e($m['attachment']); ?>" alt="anexo" style="max-width:240px;border-radius:8px"></div>
-                <?php endif; ?>
                 <?php if (!empty($m['content'])): ?><div class="msg-text"><?php echo nl2br(e($m['content'])); ?></div><?php endif; ?>
                 <div class="msg-time" style="font-size:0.75rem;color:var(--muted);margin-top:6px"><?php echo e(date('d/m H:i', strtotime($m['created_at']))); ?></div>
               </div>
@@ -451,14 +582,9 @@ unset($_SESSION['flash_success'], $_SESSION['flash_error']);
           <?php endforeach; ?>
         </section>
 
-        <form class="composer" action="" method="post" enctype="multipart/form-data">
+        <form class="composer" action="" method="post">
           <input type="hidden" name="action" value="send">
           <input type="hidden" name="conversation_id" value="<?php echo (int)$currentConvId; ?>">
-
-          <label class="file-label" title="Anexar imagem" style="cursor:pointer">
-            <input type="file" name="attachment" accept="image/*">
-            <span class="icon">📎</span>
-          </label>
 
           <textarea name="content" placeholder="Digite uma mensagem..." rows="1" required></textarea>
 
@@ -469,6 +595,116 @@ unset($_SESSION['flash_success'], $_SESSION['flash_error']);
   </div>
 
   <script>
+    const chatsNav = document.getElementById('chatsNav');
+    const messagesEl = document.getElementById('messages');
+    const usersBtn = document.getElementById('usersBtn');
+    const usersDropdown = document.getElementById('usersDropdown');
+    const chatSearch = document.getElementById('chatSearch');
+
+    let activeConvId = <?php echo json_encode($currentConvId); ?>;
+    async function fetchConversations() {
+      try {
+        const res = await fetch('?ajax=conversations');
+        const json = await res.json();
+        if (!json.ok) return;
+        const items = json.items || [];
+        const html = items.map(it => {
+          const active = (it.convo_id === activeConvId) ? ' active' : '';
+          const unreadBadge = it.unread > 0 ? `<div class="chat-unread">${it.unread}</div>` : '';
+          return `
+            <a class="chat-item${active}" href="?conversation_id=${it.convo_id}#conv-${it.convo_id}" id="conv-${it.convo_id}">
+              <div class="chat-avatar"><img src="${it.avatar}" alt="avatar"></div>
+              <div class="chat-body">
+                <div class="chat-top">
+                  <div class="chat-title">${escapeHtml(it.title)}</div>
+                  <div class="chat-time" style="font-size:0.85rem;color:var(--muted)">${escapeHtml(it.time || '')}</div>
+                </div>
+                <div class="chat-bottom" style="display:flex;justify-content:space-between;align-items:center">
+                  <div class="chat-preview">${escapeHtml(it.preview)}</div>
+                  ${unreadBadge}
+                </div>
+              </div>
+            </a>
+          `;
+        }).join('');
+        if (html) chatsNav.innerHTML = html;
+      } catch (err) {
+        console.error('erro convs', err);
+      }
+    }
+
+    async function fetchMessages() {
+      if (!activeConvId) return;
+      try {
+        const res = await fetch('?ajax=messages&conversation_id=' + encodeURIComponent(activeConvId));
+        const json = await res.json();
+        if (!json.ok) return;
+        const msgs = json.messages || [];
+        const html = msgs.map(m => {
+          const isMe = (m.sender_id === <?php echo json_encode($currentUserId); ?>);
+          const avatarHtml = isMe ? '' : `<div class="msg-avatar"><img src="${m.sender_avatar}" alt="avatar" style="width:36px;height:36px;border-radius:50%;object-fit:cover"></div>`;
+          const contentHtml = m.content ? `<div class="msg-text">${nl2br(escapeHtml(m.content))}</div>` : '';
+          return `<div class="message-row ${isMe ? 'me' : 'them'}">${avatarHtml}<div class="msg-bubble">${contentHtml}<div class="msg-time" style="font-size:0.75rem;color:var(--muted);margin-top:6px">${escapeHtml(m.created_at)}</div></div></div>`;
+        }).join('');
+        if (messagesEl) {
+          messagesEl.innerHTML = html;
+          messagesEl.scrollTop = messagesEl.scrollHeight;
+        }
+      } catch (err) {
+        console.error('erro msgs', err);
+      }
+    }
+
+    function escapeHtml(s){ return (s===null||s===undefined) ? '' : String(s).replace(/[&<>"']/g, m=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[m])); }
+    function nl2br(s){ return s.replace(/\n/g, '<br>'); }
+
+    setInterval(fetchConversations, 1000);
+    setInterval(fetchMessages, 1000);
+
+    usersBtn.addEventListener('click', async () => {
+      if (usersDropdown.style.display === 'block') {
+        usersDropdown.style.display = 'none';
+        usersDropdown.setAttribute('aria-hidden','true');
+        return;
+      }
+      try {
+        usersDropdown.innerHTML = '<div style="padding:8px;color:var(--muted)">Carregando...</div>';
+        usersDropdown.style.display = 'block';
+        usersDropdown.setAttribute('aria-hidden','false');
+        const res = await fetch('?ajax=all_users');
+        const json = await res.json();
+        if (!json.ok) {
+          usersDropdown.innerHTML = '<div style="padding:8px;color:#b32039">Erro ao carregar</div>';
+          return;
+        }
+        const html = (json.users || []).map(u => `
+          <a class="user-item" href="?start_conversation_with=${u.id}">
+            <div style="width:40px;height:40px;border-radius:50%;overflow:hidden"><img src="${u.avatar}" style="width:100%;height:100%;object-fit:cover"></div>
+            <div style="display:flex;flex-direction:column">
+              <strong style="font-size:0.95rem">${escapeHtml(u.nome)}</strong>
+              <span style="font-size:0.85rem;color:var(--muted)">${escapeHtml(u.email)}</span>
+            </div>
+          </a>
+        `).join('');
+        usersDropdown.innerHTML = html || '<div style="padding:8px;color:var(--muted)">Nenhum usuário encontrado.</div>';
+      } catch (err) {
+        usersDropdown.innerHTML = '<div style="padding:8px;color:#b32039">Erro ao carregar</div>';
+      }
+    });
+
+    document.addEventListener('click', (ev) => {
+      if (!usersDropdown.contains(ev.target) && !usersBtn.contains(ev.target)) {
+        usersDropdown.style.display = 'none';
+        usersDropdown.setAttribute('aria-hidden','true');
+      }
+    });
+
+    document.getElementById('searchForm').addEventListener('submit', function(e){
+      if (!chatSearch.value.trim()) {
+        e.preventDefault();
+      }
+    });
+
     (function(){ var m=document.getElementById('messages'); if(m) m.scrollTop=m.scrollHeight; })();
   </script>
 </body>
