@@ -67,7 +67,7 @@ $level_json_string = $raw ?? json_encode($config, JSON_UNESCAPED_UNICODE);
 
 ?>
 <!doctype html>
-<html lang="pt-BR">
+<html lang="pt-BR" class="<?php echo $_SESSION['config']['tema'] ?? "" ?>">
 <head>
   <meta charset="utf-8">
   <title><?= e($title) ?> — Level</title>
@@ -132,7 +132,7 @@ $level_json_string = $raw ?? json_encode($config, JSON_UNESCAPED_UNICODE);
   </style>
 </head>
 
-<body>
+<body class="<?php echo $_SESSION['config']['tema'] ?? "" ?>">
   <div style="height: var(--header-height);"></div>
 
   <main class="level-wrap">

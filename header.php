@@ -2,8 +2,6 @@
 
 require_once __DIR__ . '/services/config.php';
 
-session_start();
-
 /**
  * Normaliza o caminho do avatar vindo do DB/SESSION e retorna uma URL completa.
  * - Se $path for vazio -> retorna fallback padrão.
@@ -98,6 +96,54 @@ if (!isset($_SESSION['id']) && isset($_COOKIE['remember_me'])) {
   <!-- Mantive o seu CSS padrão. Se quiser apontar para um CSS local em /mnt/data (upload), substitua a linha abaixo -->
   <link rel="stylesheet" href="<?php echo 'http://' . $_SERVER['HTTP_HOST'] . '/Projeto_Final_PHP/css/index.css'; ?>" />
   <!-- EXEMPLO (não necessário): <link rel="stylesheet" href="<?php echo avatar_url_web('css/hub.css'); ?>"> -->
+
+  <!-- ▼ CSS adicional para o dropdown do avatar (coloquei inline para ficar tudo junto) ▼ -->
+  <style>
+    /* user menu dropdown - posicionado abaixo do avatar */
+    .user-menu-wrap { position: relative; display: inline-block; }
+
+    /* menu escondido por padrão */
+    #user-menu {
+      position: absolute;
+      display: none;                 /* escondido por padrão */
+      min-width: 180px;
+      max-width: 320px;
+      background: var(--surface, #ffffff);
+      color: var(--text, #0b1220);
+      border: 1px solid var(--border, rgba(0,0,0,0.08));
+      box-shadow: 0 10px 30px rgba(2,6,23,0.12);
+      border-radius: 8px;
+      z-index: 1500;
+      padding: 6px;
+      transform-origin: top center;
+      transition: transform .14s ease, opacity .14s ease;
+      opacity: 0;
+      transform: translateY(-6px) scale(0.98);
+      left: 50%;
+      top: calc(100% + 8px);
+      transform: translateX(-50%) translateY(0) scale(1);
+    }
+
+    /* quando aberto */
+    #user-menu.open {
+      display: block;
+      opacity: 1;
+      transform: translateX(-50%) translateY(6px) scale(1);
+    }
+
+    #user-menu .menu-item { padding:8px; border-radius:6px; display:flex; align-items:center; gap:8px; }
+    #user-menu .menu-item .label { margin-left:6px; }
+    #user-menu .logout-btn { display:block; text-align:center; padding:8px 10px; border-radius:6px; text-decoration:none; color:#fff; background: linear-gradient(180deg, var(--brand-blue), var(--brand-blue-dark)); }
+
+    /* small responsive tweak */
+    @media (max-width:480px) {
+      #user-menu { left: 8px; right: 8px; transform: none; top: calc(100% + 8px); }
+      #user-menu.open { transform: none; }
+    }
+
+    /* estilo básico para o toggle (simplicidade) */
+    .toggle input[type="checkbox"] { width: 16px; height: 16px; }
+  </style>
 </head>
 
 <header class="header header--fixed" role="banner">
@@ -172,9 +218,6 @@ if (!isset($_SESSION['id']) && isset($_COOKIE['remember_me'])) {
   #searchResults .search-result:hover {
     background: rgba(11,102,178,0.04);
   }
-
-  /* evita que o dropdown fique oculto por overflow de algum ancestor */
-  /* se algum elemento pai tiver overflow:hidden, aumente z-index ou mova este estilo para o <head> */
 </style>
 
 <div id="searchResults" class="search-results" role="listbox" aria-label="Resultados da busca"></div>
@@ -195,7 +238,9 @@ if (!isset($_SESSION['id']) && isset($_COOKIE['remember_me'])) {
             $url2 = 'http://' . $_SERVER['HTTP_HOST'] . '/Projeto_Final_PHP/view/hub.php';
             $url3 = 'http://' . $_SERVER['HTTP_HOST'] . '/Projeto_Final_PHP/view/post.php';
             $url4 = 'http://' . $_SERVER['HTTP_HOST'] . '/Projeto_Final_PHP/view/notify.php';
-            $url5 = 'http://' . $_SERVER['HTTP_HOST'] . '/Projeto_Final_PHP/services/logount.php';
+            // logout controller (ajuste se seu logout estiver em outro lugar)
+            $logoutUrl = 'http://' . $_SERVER['HTTP_HOST'] . '/Projeto_Final_PHP/services/logout.php';
+            $perfilUrl = 'http://' . $_SERVER['HTTP_HOST'] . '/Projeto_Final_PHP/view/perfil.php';
 
             $username = htmlspecialchars($_SESSION['nome'] ?? 'Usuário', ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
 
@@ -227,13 +272,33 @@ if (!isset($_SESSION['id']) && isset($_COOKIE['remember_me'])) {
               </button>
             </a>
 
-            <!-- avatar + nome -->
-            <a class="icon-btn" href="$url5" aria-label="Perfil" title="Perfil" style="display:flex;align-items:center;gap:8px;">
-              <span style="font-weight:bold;margin-right:6px;">$username</span>
-              <span class="avatar" style="display:inline-block; width:36px; height:36px; border-radius:50%; overflow:hidden; background:var(--border);">
-                <img src="$avatar_url" alt="Avatar" style="width:100%;height:100%;object-fit:cover;display:block;">
-              </span>
-            </a>
+            <!-- avatar + nome: substituído pelo wrapper que contém o trigger e o dropdown que abre para baixo -->
+            <div class="user-menu-wrap" style="margin-left:8px; display:inline-block; vertical-align:middle;">
+              <button id="user-menu-trigger" class="icon-btn" aria-haspopup="true" aria-expanded="false" style="display:flex;align-items:center;gap:8px; background:transparent; border:0; padding:6px; cursor:pointer;">
+                <span style="font-weight:bold;margin-right:6px;">$username</span>
+                <span class="avatar" style="display:inline-block; width:36px; height:36px; border-radius:50%; overflow:hidden; background:var(--border);">
+                  <img src="$avatar_url" alt="Avatar" style="width:100%;height:100%;object-fit:cover;display:block;">
+                </span>
+              </button>
+
+              <!-- menu inicialmente escondido; será posicionado abaixo do trigger -->
+              <div id="user-menu" class="user-menu" aria-hidden="true" role="menu" tabindex="-1">
+                  <div class="menu-item">
+                      <label class="toggle" style="display:flex;align-items:center;gap:8px;cursor:pointer">
+                          <input type="checkbox" id="toggleTheme">
+                          <span class="label">Tema escuro</span>
+                      </label>
+                  </div>
+
+                  <div style="padding:8px;">
+                    <a class="logout-btn" href="$perfilUrl">Perfil</a>
+                  </div>
+
+                  <div style="padding:8px;">
+                    <a class="logout-btn" href="$logoutUrl">Logout</a>
+                  </div>
+              </div>
+            </div>
 
             HTML;
           }
@@ -261,8 +326,8 @@ if (!isset($_SESSION['id']) && isset($_COOKIE['remember_me'])) {
         ?>
       </nav>
     </div>
-  </div>
 </header>
+
 
 <script>
 (function(){
@@ -423,6 +488,100 @@ if (!isset($_SESSION['id']) && isset($_COOKIE['remember_me'])) {
     }
   });
 
+  // ---------- MENU DO AVATAR (top-down) ----------
+  document.addEventListener('DOMContentLoaded', () => {
+    const trigger = document.getElementById('user-menu-trigger');
+    const menu = document.getElementById('user-menu');
+    const toggleTheme = document.getElementById('toggleTheme');
+
+    if (!trigger || !menu) return;
+
+    // estado inicial
+    menu.classList.remove('open');
+    menu.setAttribute('aria-hidden', 'true');
+    trigger.setAttribute('aria-expanded', 'false');
+
+    // posição do menu centralizada no trigger (ajusta para não vazar da viewport)
+    function positionMenu() {
+      const trigRect = trigger.getBoundingClientRect();
+      const wrap = trigger.closest('.user-menu-wrap');
+      const wrapRect = wrap ? wrap.getBoundingClientRect() : { left: 0, top: 0 };
+      const menuRect = menu.getBoundingClientRect();
+
+      const leftCenter = (trigRect.left + trigRect.right) / 2 - wrapRect.left;
+      menu.style.left = leftCenter + 'px';
+      menu.style.top = (trigRect.bottom - wrapRect.top + 8) + 'px';
+
+      // evita overflow horizontal
+      const viewportWidth = document.documentElement.clientWidth || window.innerWidth;
+      const absoluteLeft = wrapRect.left + leftCenter - (menuRect.width / 2 || 90);
+
+      if (absoluteLeft + menuRect.width > viewportWidth - 8) {
+        const overflow = (absoluteLeft + menuRect.width) - (viewportWidth - 8);
+        menu.style.left = (leftCenter - overflow) + 'px';
+      } else if (absoluteLeft < 8) {
+        const shift = 8 - absoluteLeft;
+        menu.style.left = (leftCenter + shift) + 'px';
+      }
+    }
+
+    trigger.addEventListener('click', (ev) => {
+      ev.stopPropagation();
+      const opening = !menu.classList.contains('open');
+      if (opening) {
+        positionMenu();
+        menu.classList.add('open');
+        menu.setAttribute('aria-hidden', 'false');
+        trigger.setAttribute('aria-expanded', 'true');
+        // set toggle checkbox initial state according to body class
+        if (toggleTheme) toggleTheme.checked = document.body.classList.contains('theme-dark');
+      } else {
+        menu.classList.remove('open');
+        menu.setAttribute('aria-hidden', 'true');
+        trigger.setAttribute('aria-expanded', 'false');
+      }
+    });
+
+    // fechar ao clicar fora
+    document.addEventListener('click', (e) => {
+      if (!menu.contains(e.target) && !trigger.contains(e.target)) {
+        menu.classList.remove('open');
+        menu.setAttribute('aria-hidden', 'true');
+        trigger.setAttribute('aria-expanded', 'false');
+      }
+    });
+
+    // ESC fecha
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        menu.classList.remove('open');
+        menu.setAttribute('aria-hidden', 'true');
+        trigger.setAttribute('aria-expanded', 'false');
+      }
+    });
+
+    // reposiciona ao redimensionar/scroll
+    window.addEventListener('resize', () => { if (menu.classList.contains('open')) positionMenu(); });
+    window.addEventListener('scroll', () => { if (menu.classList.contains('open')) positionMenu(); }, true);
+
+    // troca de tema (preserva outras classes do body)
+    if (toggleTheme) {
+      toggleTheme.checked = document.body.classList.contains('theme-dark');
+      toggleTheme.addEventListener('change', () => {
+        const isDark = toggleTheme.checked;
+        // altera apenas a classe theme-dark (preservando outras)
+        const classes = new Set(document.body.className.split(/\s+/).filter(Boolean));
+        if (isDark) classes.add('theme-dark'); else classes.delete('theme-dark');
+        document.body.className = Array.from(classes).join(' ');
+
+        // salva no backend (ajuste o caminho se necessário)
+        fetch('<?php echo 'http://' . $_SERVER['HTTP_HOST'] . '/Projeto_Final_PHP/controller/update_theme.php'; ?>', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: 'theme=' + encodeURIComponent(isDark ? 'theme-dark' : '')
+        }).catch(()=>{/* ignore errors */});
+      });
+    }
+  });
 })();
 </script>
-

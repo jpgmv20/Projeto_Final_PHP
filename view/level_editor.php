@@ -127,7 +127,7 @@ $level_json_string = $raw ?? json_encode(['title'=>$title,'difficulty'=>$difficu
     }
   </style>
 </head>
-<body>
+<body class="<?php echo $_SESSION['config']['tema'] ?? "" ?>">
   <div style="height: var(--header-height);"></div>
 
   <main class="level-wrap">

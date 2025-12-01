@@ -1,56 +1,181 @@
+/* styles with theme-dark support for your level editor */
+
+/* ========== Variables (light theme defaults) ========== */
+:root{
+  --gap:12px;
+  --muted:#7b8694;
+  --bg:#f6f7fb;
+  --card:#ffffff;
+  --text:#0b1220;
+
+  --accent: #0b66b2;           /* primary accent (buttons, highlights) */
+  --accent-strong: #095598;
+  --shadow: 0 8px 20px rgba(10,20,40,0.04);
+  --shadow-strong: 0 12px 30px rgba(10,20,40,0.08);
+  --border: rgba(0,0,0,0.06);
+
+  /* cell color tokens (kept as gradients for visual) */
+  --cell-blue-bg: linear-gradient(180deg,#dff4ff,#e3f7ff);
+  --cell-blue-color: #0b66b2;
+  --cell-green-bg: linear-gradient(180deg,#e9fbe7,#e2ffe4);
+  --cell-green-color: #10703a;
+  --cell-red-bg: linear-gradient(180deg,#ffeaea,#fff0f0);
+  --cell-red-color: #b91c1c;
+  --cell-none-bg: #ffffff;
+}
+
+/* ========== Dark theme overrides (add class "theme-dark" on body) ========== */
+body.theme-dark {
+  --muted: #97a3b3;
+  --bg: #0f1724;
+  --card: #07111a;       /* card / surface */
+  --text: #e6eef6;
+
+  --accent: #2ea0ff;
+  --accent-strong: #1b86d6;
+  --shadow: 0 8px 24px rgba(0,0,0,0.6);
+  --shadow-strong: 0 14px 40px rgba(0,0,0,0.6);
+  --border: rgba(255,255,255,0.06);
+
+  /* adjust cell tones slightly for dark bg */
+  --cell-blue-bg: linear-gradient(180deg,#082a39,#073244);
+  --cell-blue-color: #bfe8ff;
+  --cell-green-bg: linear-gradient(180deg,#09321a,#062713);
+  --cell-green-color: #baf3c9;
+  --cell-red-bg: linear-gradient(180deg,#3a0f0f,#4a1010);
+  --cell-red-color: #ffc7c7;
+  --cell-none-bg: #07121a;
+}
+
+/* ========== Base / layout ========== */
 :root{--gap:12px;--muted:#7b8694;--bg:#f6f7fb;--card:#ffffff;--text:#0b1220}
-body{font-family:system-ui,Segoe UI,Roboto,Arial;margin:0;background:var(--bg);color:var(--text);padding:20px}
+body{
+  font-family: system-ui, "Segoe UI", Roboto, Arial;
+  margin:0;
+  background: var(--bg);
+  color: var(--text);
+  padding:20px;
+  -webkit-font-smoothing:antialiased;
+  -moz-osx-font-smoothing:grayscale;
+}
+
+/* wrapper & header */
 .level-wrap{max-width:1200px;margin:0 auto;display:flex;flex-direction:column;gap:18px}
 .level-head{display:flex;flex-direction:column;gap:8px}
 .level-title{font-size:28px;font-weight:700}
 .level-diff{font-size:14px;font-weight:700;padding:6px 10px;border-radius:999px;color:#fff;display:inline-block}
 
 /* layout */
-.level-body{display:grid;grid-template-columns:220px 1fr 280px;gap:16px;align-items:start}
-@media (max-width:960px){ .level-body{grid-template-columns:1fr; } .commands-col, .functions-col{order:2} .board-col{order:1} }
+.level-body{
+  display:grid;
+  grid-template-columns:220px 1fr 280px;
+  gap:16px;
+  align-items:start;
+}
+@media (max-width:960px){
+  .level-body{grid-template-columns:1fr;}
+  .commands-col, .functions-col{order:2}
+  .board-col{order:1}
+}
 
 /* commands column */
-.commands-col{background:var(--card);padding:12px;border-radius:12px;box-shadow:0 8px 20px rgba(10,20,40,0.04)}
+.commands-col{
+  background: var(--card);
+  padding:12px;
+  border-radius:12px;
+  box-shadow: var(--shadow);
+  border: 1px solid var(--border);
+}
 .commands-col h4{margin:0 0 8px 0}
 .palette-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
-.palette-grid .cmd-btn{padding:10px;border-radius:8px;border:1px solid rgba(0,0,0,0.06);background:#fff;cursor:pointer;font-size:18px}
+.palette-grid .cmd-btn{
+  padding:10px;border-radius:8px;border:1px solid rgba(0,0,0,0.06);
+  background: var(--card);
+  cursor:pointer;font-size:18px;
+  color: var(--text);
+  box-shadow: 0 6px 12px rgba(10,20,40,0.02);
+}
 .palette-grid .cmd-btn:disabled{opacity:0.4;cursor:not-allowed}
 .legend{margin-top:10px;color:var(--muted);font-size:12px}
 
 /* board */
-.board-area{background:linear-gradient(180deg,rgba(0,0,0,0.02),transparent);padding:8px;border-radius:12px}
-.board{background:#e9eef4;padding:14px;border-radius:8px;display:inline-block}
-.grid{display:grid;gap:6px}
-.cell{width:64px;height:64px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:700;box-shadow:0 6px 12px rgba(10,20,40,0.04);border:1px solid rgba(0,0,0,0.04)}
-.c-blue{background: linear-gradient(180deg,#dff4ff,#e3f7ff); color:#0b66b2}
-.c-green{background: linear-gradient(180deg,#e9fbe7,#e2ffe4); color:#10703a}
-.c-red{background: linear-gradient(180deg,#ffeaea,#fff0f0); color:#b91c1c}
-.c-none{background:#fff;color:var(--text);border:1px dashed rgba(0,0,0,0.06)}
+.board-area{
+  background: transparent;
+  padding:8px;border-radius:12px;
+}
+.board{
+  background: var(--card);
+  padding:14px;border-radius:8px;display:inline-block;
+  box-shadow: var(--shadow);
+  border: 1px solid var(--border);
+}
+.grid{
+  display:grid;
+  gap:6px;
+  justify-content:center;
+}
+.cell{
+  width:64px;height:64px;border-radius:8px;display:flex;align-items:center;justify-content:center;
+  font-size:18px;font-weight:700;
+  box-shadow: var(--shadow);
+  border:1px solid var(--border);
+  color: var(--text);
+  background: var(--cell-none-bg);
+}
+
+/* color variants for cells */
+.c-blue{background: var(--cell-blue-bg); color: var(--cell-blue-color)}
+.c-green{background: var(--cell-green-bg); color: var(--cell-green-color)}
+.c-red{background: var(--cell-red-bg); color: var(--cell-red-color)}
+.c-none{background: var(--cell-none-bg); color: var(--text); border-style: dashed}
 
 /* sequence */
-.sequence-area{margin-top:12px;background:var(--card);padding:10px;border-radius:8px;display:flex;flex-direction:column;gap:8px}
+.sequence-area{
+  margin-top:12px;
+  background: var(--card);
+  padding:10px;border-radius:8px;
+  box-shadow: var(--shadow);
+  border: 1px solid var(--border);
+  display:flex;flex-direction:column;gap:8px;
+}
 .sequence-strip{display:flex;gap:6px;min-height:44px;align-items:center}
-.seq-item{padding:8px 10px;border-radius:8px;background:#fff;border:1px solid rgba(0,0,0,0.06);display:inline-flex;align-items:center;justify-content:center;min-width:34px;height:34px}
+.seq-item{
+  padding:8px 10px;border-radius:8px;background:var(--card);border:1px solid var(--border);
+  display:inline-flex;align-items:center;justify-content:center;min-width:34px;height:34px;color:var(--text)
+}
 .seq-item.active{box-shadow:0 6px 18px rgba(11,102,178,0.12);transform:translateY(-4px)}
 
 /* controls */
 .sequence-controls{display:flex;gap:8px;align-items:center}
-.btn{padding:8px 10px;border-radius:8px;border:0;background:#0b66b2;color:#fff;cursor:pointer}
+.btn{
+  padding:8px 10px;border-radius:8px;border:0;
+  background: var(--accent);
+  color:#fff;
+  cursor:pointer;
+  box-shadow: var(--shadow-strong);
+}
 .btn.small{padding:6px 8px;font-size:0.9rem}
 
 /* functions column */
-.functions-col{background:var(--card);padding:12px;border-radius:12px;box-shadow:0 8px 20px rgba(10,20,40,0.04)}
+.functions-col{
+  background: var(--card);
+  padding:12px;border-radius:12px;box-shadow:var(--shadow);
+  border: 1px solid var(--border);
+}
 .functions-col h4{margin:0 0 8px 0}
 .function{margin-bottom:12px}
 .fn-title{font-weight:700;margin-bottom:6px}
 .fn-slots{display:flex;gap:6px;flex-wrap:wrap}
-.fn-slot{min-width:34px;height:34px;border-radius:6px;border:1px dashed rgba(0,0,0,0.06);background:#fff;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;font-weight:700}
+.fn-slot{
+  min-width:34px;height:34px;border-radius:6px;border:1px dashed var(--border);
+  background:var(--card);cursor:pointer;display:inline-flex;align-items:center;justify-content:center;font-weight:700;
+  color:var(--text);
+}
 .fn-slot[data-empty="1"]{opacity:0.55}
-.fn-slot.selected{outline:2px solid rgba(11,102,178,0.18);background:#f0f9ff}
+.fn-slot.selected{outline:2px solid rgba(11,102,178,0.18);background: rgba(240,249,255,0.9)}
 
 /* small helpers */
 .small{font-size:12px;color:var(--muted)}
-
 
 /* ajusta gap geral entre colunas (board / functions / commands) */
 .level-body {
@@ -60,7 +185,7 @@ body{font-family:system-ui,Segoe UI,Roboto,Arial;margin:0;background:var(--bg);c
 }
 
 /* garante que o grid fique centralizado horizontalmente e sem texto dentro das células */
-.grid { 
+.grid {
   display: grid;
   gap: 8px;
 }
@@ -80,7 +205,7 @@ body{font-family:system-ui,Segoe UI,Roboto,Arial;margin:0;background:var(--bg);c
 }
 
 /* separa o título "Funções" da primeira função e afasta a lista do topo */
-.functions-col { 
+.functions-col {
   padding-top: 8px;
 }
 .functions-list {
@@ -103,11 +228,90 @@ body{font-family:system-ui,Segoe UI,Roboto,Arial;margin:0;background:var(--bg);c
   height: 36px;
   border-radius: 6px;
   border: 1px dashed rgba(0,0,0,0.08);
-  background: #fff;
+  background: var(--card);
   cursor: pointer;
   font-size: 18px;
   line-height: 1;
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  color: var(--text);
+}
+
+/* ---------- Accessibility / small fixes ---------- */
+button:focus, .cmd-btn:focus, .fn-slot:focus {
+  outline: 3px solid rgba(11,102,178,0.14);
+  outline-offset: 2px;
+}
+
+/* ---------- Light / Dark specific tweaks for small elements ---------- */
+/* tweak fn-slot selected look for dark */
+body.theme-dark .fn-slot.selected { background: rgba(20,60,80,0.3); outline-color: rgba(46,160,255,0.22); }
+
+/* tweak seq-item active in dark */
+body.theme-dark .seq-item.active { box-shadow: 0 8px 24px rgba(0,0,0,0.6); transform: translateY(-3px); }
+
+/* keep high contrast for diff badge (you can change these) */
+.level-diff { background: var(--accent); }
+
+/* preserve gradients for cell colors but ensure text contrast in dark */
+.c-blue, .c-green, .c-red, .c-none { color: inherit; }
+
+/* ensure dashed borders are visible in dark */
+body.theme-dark .fn-slot { border-color: rgba(255,255,255,0.06); }
+body.theme-dark .cell { border-color: rgba(255,255,255,0.04); box-shadow: var(--shadow); }
+
+/* responsive refinement */
+@media (max-width:720px) {
+  .level-body { gap: 20px; flex-direction: column; }
+  .grid { justify-content: center; }
+}
+
+/* ============================================================
+   TEMA ESCURO GLOBAL (aplica quando <html class="theme-dark">)
+   ============================================================ */
+html.theme-dark {
+  --muted: #97a3b3;
+  --bg: #0f1724;
+  --card: #07111a;
+  --text: #e6eef6;
+
+  --accent: #2ea0ff;
+  --accent-strong: #1b86d6;
+  --shadow: 0 8px 24px rgba(0,0,0,0.6);
+  --shadow-strong: 0 14px 40px rgba(0,0,0,0.6);
+  --border: rgba(255,255,255,0.06);
+
+  --cell-blue-bg: linear-gradient(180deg,#082a39,#073244);
+  --cell-blue-color: #bfe8ff;
+  --cell-green-bg: linear-gradient(180deg,#09321a,#062713);
+  --cell-green-color: #baf3c9;
+  --cell-red-bg: linear-gradient(180deg,#3a0f0f,#4a1010);
+  --cell-red-color: #ffc7c7;
+  --cell-none-bg: #07121a;
+}
+
+/* ============================================================
+   TEMA ESCURO LOCAL (aplica só ao componente level-wrap)
+   Exemplo: <div class="level-wrap theme-dark">...</div>
+   ============================================================ */
+.level-wrap.theme-dark {
+  --muted: #97a3b3;
+  --bg: #0f1724;
+  --card: #07111a;
+  --text: #e6eef6;
+
+  --accent: #2ea0ff;
+  --accent-strong: #1b86d6;
+  --shadow: 0 8px 24px rgba(0,0,0,0.6);
+  --shadow-strong: 0 14px 40px rgba(0,0,0,0.6);
+  --border: rgba(255,255,255,0.06);
+
+  --cell-blue-bg: linear-gradient(180deg,#082a39,#073244);
+  --cell-blue-color: #bfe8ff;
+  --cell-green-bg: linear-gradient(180deg,#09321a,#062713);
+  --cell-green-color: #baf3c9;
+  --cell-red-bg: linear-gradient(180deg,#3a0f0f,#4a1010);
+  --cell-red-color: #ffc7c7;
+  --cell-none-bg: #07121a;
 }

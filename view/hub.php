@@ -78,7 +78,7 @@ function get_user_suggestions(mysqli $mysqli, ?string $query, int $limit = 10, i
     $out = [];
     if ($query === null) return $out;
     $q = trim($query);
-    if ($q === '') return $out; // comportamento removido conforme solicitado
+    if ($q === '') return $out;
     $like = '%' . $q . '%';
     $stmt = $mysqli->prepare("SELECT id, nome, avatar_url, email FROM users WHERE (nome LIKE ? OR email LIKE ?) AND id != ? ORDER BY nome LIMIT ?");
     if (!$stmt) return $out;
@@ -145,11 +145,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'send'
     }
 
     $mysqli->begin_transaction();
-    $stmt = $mysqli->prepare("INSERT INTO conversation_messages (conversation_id, sender_id, content, read_by) VALUES (?, ?, ?, JSON_ARRAY(?))");
-    $curStr = (string)$currentUserId;
-    $stmt->bind_param('iiss', $convId, $currentUserId, $content, $curStr);
-    $stmt->execute();
+
+    // gravamos read_by como JSON string contendo o id do remetente (marcado como lido por quem enviou)
+    $initRead = json_encode([$currentUserId], JSON_UNESCAPED_UNICODE);
+
+    $stmt = $mysqli->prepare("INSERT INTO conversation_messages (conversation_id, sender_id, content, read_by) VALUES (?, ?, ?, ?)");
+    if (!$stmt) {
+        $mysqli->rollback();
+        $_SESSION['flash_error'] = "Erro ao preparar query de envio: " . $mysqli->error;
+        header("Location: " . $_SERVER['REQUEST_URI']);
+        exit;
+    }
+    $stmt->bind_param('iiss', $convId, $currentUserId, $content, $initRead);
+    if (!$stmt->execute()) {
+        $stmt->close();
+        $mysqli->rollback();
+        $_SESSION['flash_error'] = "Erro ao executar envio: " . $stmt->error;
+        header("Location: " . $_SERVER['REQUEST_URI']);
+        exit;
+    }
     $stmt->close();
+
     $mysqli->query("UPDATE conversations SET last_message_at = CURRENT_TIMESTAMP WHERE id = " . (int)$convId);
     $mysqli->commit();
 
@@ -231,15 +247,35 @@ if (isset($_GET['ajax'])) {
             exit;
         }
 
-        $markSql = "UPDATE conversation_messages
-                    SET read_by = JSON_ARRAY_APPEND(COALESCE(read_by, JSON_ARRAY()), '$', CAST(? AS JSON))
-                    WHERE conversation_id = ? AND (JSON_CONTAINS(read_by, JSON_QUOTE(?)) = 0 OR read_by IS NULL)";
-        $markStmt = $mysqli->prepare($markSql);
-        $curStr = (string)$currentUserId;
-        $markStmt->bind_param('sis', $curStr, $convId, $curStr);
-        $markStmt->execute();
-        $markStmt->close();
+        // Marcamos as mensagens como lidas por este usuário — sem usar JSON SQL:
+        // 1) selecionamos mensagens do conv onde sender != currentUser
+        // 2) para cada mensagem, decodificamos read_by, adicionamos o id se não estiver presente e atualizamos com JSON string
+        $sel = $mysqli->prepare("SELECT id, read_by, sender_id FROM conversation_messages WHERE conversation_id = ? AND sender_id != ?");
+        $sel->bind_param('ii', $convId, $currentUserId);
+        $sel->execute();
+        $rsel = $sel->get_result();
+        while ($row = $rsel->fetch_assoc()) {
+            $mid = (int)$row['id'];
+            $rb = $row['read_by'];
+            $arr = [];
+            if ($rb !== null && $rb !== '') {
+                $decoded = json_decode($rb, true);
+                if (is_array($decoded)) $arr = $decoded;
+            }
+            if (!in_array($currentUserId, $arr, true)) {
+                $arr[] = $currentUserId;
+                $jsonStr = json_encode(array_values($arr), JSON_UNESCAPED_UNICODE);
+                $up = $mysqli->prepare("UPDATE conversation_messages SET read_by = ? WHERE id = ?");
+                if ($up) {
+                    $up->bind_param('si', $jsonStr, $mid);
+                    $up->execute();
+                    $up->close();
+                }
+            }
+        }
+        $sel->close();
 
+        // Agora selecionamos e retornamos as mensagens normalmente
         $mstmt = $mysqli->prepare("SELECT cm.*, u.nome AS sender_name, u.avatar_url AS sender_avatar FROM conversation_messages cm LEFT JOIN users u ON u.id = cm.sender_id WHERE cm.conversation_id = ? ORDER BY cm.created_at ASC");
         $mstmt->bind_param('i', $convId);
         $mstmt->execute();
@@ -286,15 +322,25 @@ if (isset($_GET['ajax'])) {
 
 /* ---------------- count_unread & get_convo_members ---------------- */
 function count_unread(mysqli $mysqli, $conversation_id, $user_id) {
-    $sql = "SELECT COUNT(*) as cnt FROM conversation_messages WHERE conversation_id = ? AND (JSON_CONTAINS(read_by, JSON_QUOTE(?)) = 0 OR read_by IS NULL) AND sender_id != ?";
+    // Não usamos JSON SQL: buscamos mensagens e contamos em PHP
+    $sql = "SELECT id, read_by, sender_id FROM conversation_messages WHERE conversation_id = ? AND sender_id != ?";
     $stmt = $mysqli->prepare($sql);
-    $u_str = (string)$user_id;
-    $stmt->bind_param('isi', $conversation_id, $u_str, $user_id);
+    if (!$stmt) return 0;
+    $stmt->bind_param('ii', $conversation_id, $user_id);
     $stmt->execute();
     $res = $stmt->get_result();
-    $row = $res->fetch_assoc();
+    $cnt = 0;
+    while ($row = $res->fetch_assoc()) {
+        $rb = $row['read_by'];
+        $arr = [];
+        if ($rb !== null && $rb !== '') {
+            $decoded = json_decode($rb, true);
+            if (is_array($decoded)) $arr = $decoded;
+        }
+        if (!in_array($user_id, $arr, true)) $cnt++;
+    }
     $stmt->close();
-    return (int)($row['cnt'] ?? 0);
+    return (int)$cnt;
 }
 
 function get_convo_members(mysqli $mysqli, $conversation_id) {
@@ -363,14 +409,31 @@ if ($currentConvId) {
     $currentConv = $r->fetch_assoc();
     $q->close();
 
-    $markSql = "UPDATE conversation_messages
-                SET read_by = JSON_ARRAY_APPEND(COALESCE(read_by, JSON_ARRAY()), '$', CAST(? AS JSON))
-                WHERE conversation_id = ? AND (JSON_CONTAINS(read_by, JSON_QUOTE(?)) = 0 OR read_by IS NULL)";
-    $markStmt = $mysqli->prepare($markSql);
-    $curStr = (string)$currentUserId;
-    $markStmt->bind_param('sis', $curStr, $currentConvId, $curStr);
-    $markStmt->execute();
-    $markStmt->close();
+    // Marcar mensagens como lidas — sem usar JSON no SQL:
+    $sel = $mysqli->prepare("SELECT id, read_by, sender_id FROM conversation_messages WHERE conversation_id = ? AND sender_id != ?");
+    $sel->bind_param('ii', $currentConvId, $currentUserId);
+    $sel->execute();
+    $resSel = $sel->get_result();
+    while ($row = $resSel->fetch_assoc()) {
+        $mid = (int)$row['id'];
+        $rb = $row['read_by'];
+        $arr = [];
+        if ($rb !== null && $rb !== '') {
+            $decoded = json_decode($rb, true);
+            if (is_array($decoded)) $arr = $decoded;
+        }
+        if (!in_array($currentUserId, $arr, true)) {
+            $arr[] = $currentUserId;
+            $jsonStr = json_encode(array_values($arr), JSON_UNESCAPED_UNICODE);
+            $up = $mysqli->prepare("UPDATE conversation_messages SET read_by = ? WHERE id = ?");
+            if ($up) {
+                $up->bind_param('si', $jsonStr, $mid);
+                $up->execute();
+                $up->close();
+            }
+        }
+    }
+    $sel->close();
 
     $mstmt = $mysqli->prepare("SELECT cm.*, u.nome AS sender_name, u.avatar_url AS sender_avatar FROM conversation_messages cm LEFT JOIN users u ON u.id = cm.sender_id WHERE cm.conversation_id = ? ORDER BY cm.created_at ASC");
     $mstmt->bind_param('i', $currentConvId);
