@@ -1,6 +1,7 @@
 <?php
 // view/level.php
 require_once __DIR__ . '/../header.php'; // integra header conforme solicitado
+require_once __DIR__ .'/../services/config.php';
 
 function e($v){ return htmlspecialchars((string)$v, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); }
 
@@ -64,6 +65,25 @@ $diff_color = $diff_colors[$difficulty] ?? $diff_colors['easy'];
 
 // pass the original JSON string for potential POST back
 $level_json_string = $raw ?? json_encode($config, JSON_UNESCAPED_UNICODE);
+
+// --- registra visita corretamente ---
+if (isset($_POST['level_id']) && isset($_SESSION['id'])) {
+    require_once __DIR__ . '/../services/config.php';
+    $mysqli = connect_mysql();
+
+    $levelId = (int)$_POST['level_id'];
+    $userId  = (int)$_SESSION['id'];
+
+    if ($levelId > 0) {
+        $stmt = $mysqli->prepare("UPDATE levels SET plays_count = plays_count + 1 WHERE id = ?");
+        $stmt->bind_param("i", $levelId);
+        $stmt->execute();
+        $stmt->close();
+    }
+
+    $mysqli->close();
+}
+
 
 ?>
 <!doctype html>

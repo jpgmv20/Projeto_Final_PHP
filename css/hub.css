@@ -273,3 +273,29 @@ body.theme-dark .msg-attachment img { max-width: 300px; }
 a, button { -webkit-tap-highlight-color: transparent; }
 
 /* End of hub.css */
+.exit-div{
+  padding: 5%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+}
+.exit-btt{
+  text-decoration: none;
+  padding: 3% 15% 3% 15%;
+  border: 1px solid var(--brand-blue);
+  border-radius: 16px;
+  color: var(--brand-blue);
+}
+.exit-btt:hover{
+  color: var(--brand-blue);
+  background: rgba(86, 236, 239, 0.2);
+  border: 1px solid var(--brand-blue);
+  transition: all 0.2s ease-in-out;
+}
+.exit-btt:active{
+  transition: all 0.1s ease-in-out;
+  outline: 3px solid var(--brand-blue);
+  outline-offset: 1px;
+  transform: scale(0.95);
+}

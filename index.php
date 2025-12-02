@@ -184,7 +184,7 @@ $preview_cell = 18;
 
 ?>
 <!doctype html>
-<html lang="pt-BR">
+<html lang="pt-BR" class="<?php $config = $_SESSION['config']['tema'] ?? ""; echo h($config); ?>">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -345,6 +345,7 @@ $preview_cell = 18;
 
                   <!-- Form que envia o JSON do level via POST para view/level.php -->
                   <form method="post" action="<?= 'http://' . $_SERVER['HTTP_HOST'] . '/Projeto_Final_PHP/view/level.php' ?>" class="card-form">
+                    <input type="hidden" name="level_id" value="<?= (int)$lvl['id'] ?>">
                     <input type="hidden" name="select_level" value="<?= $json_input_value ?>">
                     <div class="card-right">
                       <button type="submit" class="open-btn">Abrir</button>

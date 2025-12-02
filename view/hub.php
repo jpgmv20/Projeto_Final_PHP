@@ -487,9 +487,9 @@ unset($_SESSION['flash_success'], $_SESSION['flash_error']);
         <h3 style="margin:0">Conversas</h3>
         <div style="display:flex;align-items:center;gap:8px">
           <!-- Avatar do usuário logado -->
-          <div class="avatar small" title="<?php echo e($currentUserName); ?>">
+          <button class="avatar small" title="<?php echo e($currentUserName); ?>" id="goPerfil" style="display:flex;align-items:center;gap:12px;border:none;background:none;cursor:pointer;padding:0;">
             <img src="<?php echo e($currentUserAvatar); ?>" alt="avatar" style="width:100%;height:100%;object-fit:cover;display:block">
-          </div>
+          </button>
         </div>
       </div>
 
@@ -564,8 +564,12 @@ unset($_SESSION['flash_success'], $_SESSION['flash_error']);
             </div>
           </a>
         <?php endforeach; endif; ?>
-      </nav>
 
+      </nav>
+        <div class="exit-div">
+
+          <a href="../index.php" class="exit-btt">Voltar</a>
+        </div>
       <div style="padding:8px;border-top:1px solid #f0f0f2;font-size:0.85rem;color:var(--muted)">Hub de Conversas — integrado ao robozzle</div>
     </aside>
 
@@ -578,38 +582,39 @@ unset($_SESSION['flash_success'], $_SESSION['flash_error']);
       <?php else: ?>
         <header class="panel-header">
   <button class="back-btn" onclick="history.back()">← Voltar</button>
-  <div class="panel-title" style="display:flex;align-items:center;gap:12px">
+  <button id="goPerfil" class="panel-title" style="display:flex;align-items:center;gap:12px;border:none;background:none;cursor:pointer;padding:0;">
+
     <?php
       // pega membros da conversa
       $members = get_convo_members($mysqli, $currentConvId);
 
       // tenta identificar o "outro" usuário (primeiro diferente do user logado)
       $otherUser = null;
-      if (is_array($members) && count($members) > 0) {
-          foreach ($members as $memb) {
-              if ((int)$memb['id'] !== $currentUserId) {
-                  $otherUser = $memb;
-                  break;
-              }
+      foreach ($members as $memb) {
+          if ((int)$memb['id'] !== $currentUserId) {
+              $otherUser = $memb;
+              break;
           }
-          if ($otherUser === null) {
-              $otherUser = $members[0];
-          }
+      }
+      if ($otherUser === null) {
+          $otherUser = $members[0]; // fallback
       }
 
       $title = $currentConv['title'] ?: ($otherUser['nome'] ?? 'Chat');
       $otherAvatarUrl = avatar_url_web($otherUser['id'] ?? '');
     ?>
     <div class="avatar medium" style="width:48px;height:48px;border-radius:8px;overflow:hidden;flex:0 0 auto;">
-      <!-- sempre mostramos a imagem via get_avatar (ele deve devolver fallback caso não haja blob) -->
-      <img src="<?php echo e($otherAvatarUrl); ?>" alt="Avatar <?php echo e($otherUser['nome'] ?? ''); ?>" style="width:100%;height:100%;object-fit:cover;display:block">
+      <img src="<?php echo e($otherAvatarUrl); ?>" alt="Avatar <?php echo e($otherUser['nome'] ?? ''); ?>"
+           style="width:100%;height:100%;object-fit:cover;display:block">
     </div>
 
     <div>
       <div class="title" style="font-weight:700"><?php echo e($title); ?></div>
-      <div class="sub muted" style="font-size:0.9rem;color:var(--muted)"><?php echo count($members); ?> participante(s)</div>
+      <div class="sub muted" style="font-size:0.9rem;color:var(--muted)">
+        <?php echo count($members); ?> participante(s)
+      </div>
     </div>
-  </div>
+  </button>
 </header>
 
         <section class="messages" id="messages">
@@ -630,7 +635,7 @@ unset($_SESSION['flash_success'], $_SESSION['flash_error']);
           <input type="hidden" name="action" value="send">
           <input type="hidden" name="conversation_id" value="<?php echo (int)$currentConvId; ?>">
 
-          <textarea name="content" placeholder="Digite uma mensagem..." rows="1" required></textarea>
+          <textarea id="message-input" name="content" placeholder="Digite uma mensagem..." rows="1" required></textarea>
 
           <button type="submit" class="send-btn">Enviar</button>
         </form>
@@ -639,12 +644,22 @@ unset($_SESSION['flash_success'], $_SESSION['flash_error']);
   </div>
 
   <script>
+      let goPerfil = document.getElementById("goPerfil");
+      goPerfil.addEventListener("click", function() {
+        window.location.href = "/Projeto_Final_PHP/view/perfil.php?user_id=<?php echo (int)$otherUser['id']; ?>";
+      });
+            let gomyPerfil = document.getElementsByClassName("avatar small");
+      goPerfil.addEventListener("click", function() {
+        window.location.href = "/Projeto_Final_PHP/view/perfil.php?user_id=<?php echo (int)$_SESSION['id']; ?>";
+      });
     const chatsNav = document.getElementById('chatsNav');
     const messagesEl = document.getElementById('messages');
     const usersBtn = document.getElementById('usersBtn');
     const usersDropdown = document.getElementById('usersDropdown');
     const chatSearch = document.getElementById('chatSearch');
-
+    let inputchat=document.getElementById("message-input")
+    const EnterKeyPressCode=13;              
+    inputchat.addEventListener('keydown', function(event) {if (event.keyCode === EnterKeyPressCode) {event.preventDefault(); this.form.submit();}});
     let activeConvId = <?php echo json_encode($currentConvId); ?>;
     async function fetchConversations() {
       try {
