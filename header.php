@@ -1,90 +1,107 @@
 <?php
+// header.php
+// Cabeçalho compartilhado — normaliza avatar via get_avatar.php (por id) e faz restore de sessão via cookie remember_me
+
+// Inicia sessão (sempre antes de qualquer output)
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
 
 require_once __DIR__ . '/services/config.php';
 
 /**
- * Normaliza o caminho do avatar vindo do DB/SESSION e retorna uma URL completa.
- * - Se $path for vazio -> retorna fallback padrão.
- * - Se $path já for http(s) -> retorna inalterado.
- * - Se $path for relativo (ex: "image/foo.jpg" ou "Projeto_Final_PHP/image/foo.jpg")
- *   -> monta: http://<host>/Projeto_Final_PHP/<path-sem-duplicacao>
+ * Normaliza a URL do avatar:
+ * - Se $user_or_path for numérico (ID do usuário) -> retorna URL para controller/get_avatar.php?id=ID
+ * - Se vazio -> retorna imagem fallback absoluta
+ * - Se já for URL http(s) -> retorna inalterado
+ * - Se for caminho relativo -> monta URL absoluta dentro do Projeto_Final_PHP
  */
 if (!function_exists('avatar_url_web')) {
-    function avatar_url_web(string $path = ''): string {
-        // fallback relativo (apontando para dentro do projeto)
+    function avatar_url_web(string $user_or_path = ''): string {
         $default = 'image/images.jfif';
 
         // se vazio devolve fallback absoluto
-        if (empty($path)) {
+        if ($user_or_path === '' || $user_or_path === null) {
             return 'http://' . $_SERVER['HTTP_HOST'] . '/Projeto_Final_PHP/' . $default;
         }
 
-        // se já for URL absoluta, devolve
-        if (preg_match('#^https?://#i', $path)) {
-            return $path;
+        // se for apenas dígitos -> tratamos como user_id e retornamos o endpoint que serve o BLOB
+        if (ctype_digit((string)$user_or_path)) {
+            $id = intval($user_or_path);
+            if ($id <= 0) {
+                return 'http://' . $_SERVER['HTTP_HOST'] . '/Projeto_Final_PHP/' . $default;
+            }
+            return 'http://' . $_SERVER['HTTP_HOST'] . '/Projeto_Final_PHP/controller/get_avatar.php?id=' . $id;
         }
 
-        // remove barras iniciais
-        $p = ltrim($path, '/');
+        // se já for URL absoluta
+        if (preg_match('#^https?://#i', $user_or_path)) {
+            return $user_or_path;
+        }
 
-        // remove repetições do nome do projeto para evitar /Projeto_Final_PHP/Projeto_Final_PHP/...
+        // remove barras iniciais e repetições do projeto
+        $p = ltrim($user_or_path, '/');
         $p = preg_replace('#^(?:Projeto_Final_PHP/)+#i', '', $p);
 
-        // monta URL final
         return 'http://' . $_SERVER['HTTP_HOST'] . '/Projeto_Final_PHP/' . $p;
     }
 }
 
 // -- restaurar sessão automaticamente se existir cookie remember_me --
+// cookie formato esperado: "<user_id>:<token>"
 if (!isset($_SESSION['id']) && isset($_COOKIE['remember_me'])) {
 
-    // proteção: explode apenas se conter ':'
+    // proteção: explode apenas se conter ':' e parte esquerda for numérica
     if (strpos($_COOKIE['remember_me'], ':') !== false) {
-        list($user_id, $token) = explode(":", $_COOKIE['remember_me'], 2);
-        $token_hash = hash('sha256', $token);
+        list($raw_user_id, $token) = explode(":", $_COOKIE['remember_me'], 2);
+        $user_id = intval($raw_user_id);
+        if ($user_id > 0 && is_string($token) && $token !== '') {
+            $token_hash = hash('sha256', $token);
 
-        $mysqli = connect_mysql();
+            $mysqli = connect_mysql();
 
-        if ($mysqli) {
-            $stmt = $mysqli->prepare("
-                SELECT users.id, users.nome, users.descricao, users.email, users.avatar_url, users.config
-                FROM user_tokens
-                JOIN users ON users.id = user_tokens.user_id
-                WHERE user_tokens.user_id = ?
-                AND user_tokens.token_hash = ?
-                AND user_tokens.expires_at > NOW()
-                LIMIT 1
-            ");
+            if ($mysqli) {
+                $sql = "
+                    SELECT users.id, users.nome, users.descricao, users.email, users.config
+                    FROM user_tokens
+                    JOIN users ON users.id = user_tokens.user_id
+                    WHERE user_tokens.user_id = ?
+                      AND user_tokens.token_hash = ?
+                      AND user_tokens.expires_at > NOW()
+                    LIMIT 1
+                ";
+                $stmt = $mysqli->prepare($sql);
+                if ($stmt) {
+                    $stmt->bind_param("is", $user_id, $token_hash);
+                    if ($stmt->execute()) {
+                        $result = $stmt->get_result();
+                        if ($user = $result->fetch_assoc()) {
 
-            if ($stmt) {
-                $stmt->bind_param("is", $user_id, $token_hash);
-                $stmt->execute();
-                $result = $stmt->get_result();
-
-                if ($user = $result->fetch_assoc()) {
-
-                    // recria a sessão
-                    $_SESSION['id'] = $user["id"];
-                    $_SESSION['nome'] = $user["nome"];
-                    $_SESSION['descricao'] = $user["descricao"];
-                    $_SESSION['email'] = $user["email"];
-                    $_SESSION['avatar_url'] = $user["avatar_url"];
-                    // se config for JSON guardado como string no DB, decodifique; se já for array/obj, mantenha
-                    $_SESSION['config'] = is_string($user["config"]) ? json_decode($user["config"], true) : $user["config"];
-
-                } else {
-
-                    // token inválido → apaga o cookie
-                    setcookie("remember_me", "", time() - 3600, "/");
+                            // recria a sessão (não armazenamos avatar_url aqui — usamos avatar_url_web($_SESSION['id']))
+                            $_SESSION['id'] = (int)$user["id"];
+                            $_SESSION['nome'] = $user["nome"];
+                            $_SESSION['descricao'] = $user["descricao"];
+                            $_SESSION['email'] = $user["email"];
+                            // se config for JSON guardado como string no DB, decodifique; se já for array/obj, mantenha
+                            $_SESSION['config'] = is_string($user["config"]) ? json_decode($user["config"], true) : $user["config"];
+                        } else {
+                            // token inválido → apaga o cookie
+                            setcookie("remember_me", "", time() - 3600, "/");
+                        }
+                    } else {
+                        // erro ao executar -> removemos cookie para evitar loops
+                        setcookie("remember_me", "", time() - 3600, "/");
+                    }
+                    $stmt->close();
                 }
-
-                $stmt->close();
+                $mysqli->close();
             }
-
-            $mysqli->close();
+        } else {
+            // cookie malformado -> apaga para evitar re-execuções
+            setcookie("remember_me", "", time() - 3600, "/");
         }
     } else {
-        // cookie malformado -> apaga para evitar re-execuções
+        // cookie sem ':' -> apaga
         setcookie("remember_me", "", time() - 3600, "/");
     }
 }
@@ -93,11 +110,7 @@ if (!isset($_SESSION['id']) && isset($_COOKIE['remember_me'])) {
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <!-- Mantive o seu CSS padrão. Se quiser apontar para um CSS local em /mnt/data (upload), substitua a linha abaixo -->
   <link rel="stylesheet" href="<?php echo 'http://' . $_SERVER['HTTP_HOST'] . '/Projeto_Final_PHP/css/index.css'; ?>" />
-  <!-- EXEMPLO (não necessário): <link rel="stylesheet" href="<?php echo avatar_url_web('css/hub.css'); ?>"> -->
-
-  <!-- ▼ CSS adicional para o dropdown do avatar (coloquei inline para ficar tudo junto) ▼ -->
   <style>
     /* user menu dropdown - posicionado abaixo do avatar */
     .user-menu-wrap { position: relative; display: inline-block; }
@@ -158,45 +171,39 @@ if (!isset($_SESSION['id']) && isset($_COOKIE['remember_me'])) {
       </a>
     </div>
 
+    <!-- centro: busca -->
+    <div class="header__center" aria-hidden="false">
+      <div class="search" role="search" aria-label="Buscar">
+        <div class="search__wrap">
+          <span class="search__icon" aria-hidden="true">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+                 xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+              <path d="M21 21l-4.35-4.35"
+                    stroke="currentColor" stroke-width="2"
+                    stroke-linecap="round" stroke-linejoin="round"/>
+              <circle cx="11" cy="11" r="6"
+                      stroke="currentColor" stroke-width="2"
+                      stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </span>
 
-<!-- centro: busca -->
-<div class="header__center" aria-hidden="false">
-  <div class="search" role="search" aria-label="Buscar">
-    <div class="search__wrap">
+          <input
+            class="search__input"
+            type="search"
+            name="q"
+            id="globalSearch"
+            placeholder="Buscar no site"
+            aria-label="Buscar"
+            autocomplete="off"
+          />
 
-      <!-- ícone de lupa (simples SVG) -->
-      <span class="search__icon" aria-hidden="true">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
-             xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-          <path d="M21 21l-4.35-4.35"
-                stroke="currentColor" stroke-width="2"
-                stroke-linecap="round" stroke-linejoin="round"/>
-          <circle cx="11" cy="11" r="6"
-                  stroke="currentColor" stroke-width="2"
-                  stroke-linecap="round" stroke-linejoin="round"/>
-        </svg>
-      </span>
-
-      <!-- campo de pesquisa -->
-      <input
-        class="search__input"
-        type="search"
-        name="q"
-        id="globalSearch"
-        placeholder="Buscar no site"
-        aria-label="Buscar"
-        autocomplete="off"
-      />
-
-      <!-- RESULTADOS (substitua a div anterior por este bloco) -->
 <style>
-  /* escopo local: garante que o dropdown apareça abaixo do input, não seja transparente e tenha scrollbar */
-  .search__wrap { position: relative; } /* reforça o contexto de posicionamento */
+  .search__wrap { position: relative; }
   #searchResults {
     position: absolute;
     left: 0;
     right: 0;
-    top: calc(100% + 8px);        /* fica logo abaixo do input */
+    top: calc(100% + 8px);
     background: var(--surface, #ffffff);
     color: var(--text, #0b1220);
     border: 1px solid rgba(0,0,0,0.08);
@@ -205,27 +212,19 @@ if (!isset($_SESSION['id']) && isset($_COOKIE['remember_me'])) {
     z-index: 1200;
     max-height: 320px;
     overflow: auto;
-    display: none;                /* o seu JS mostra/esconde */
+    display: none;
     padding: 6px;
-    backdrop-filter: none;        /* evita transparência por fallback */
+    backdrop-filter: none;
   }
-
-  /* visual dos itens */
-  #searchResults .search-result {
-    background: transparent;
-    transition: background .12s;
-  }
-  #searchResults .search-result:hover {
-    background: rgba(11,102,178,0.04);
-  }
+  #searchResults .search-result { background: transparent; transition: background .12s; }
+  #searchResults .search-result:hover { background: rgba(11,102,178,0.04); }
 </style>
 
 <div id="searchResults" class="search-results" role="listbox" aria-label="Resultados da busca"></div>
 
+        </div>
+      </div>
     </div>
-  </div>
-</div>
-
 
     <!-- direita: nav / botões -->
     <div class="header__right" style="margin-left:auto;">
@@ -238,23 +237,16 @@ if (!isset($_SESSION['id']) && isset($_COOKIE['remember_me'])) {
             $url2 = 'http://' . $_SERVER['HTTP_HOST'] . '/Projeto_Final_PHP/view/hub.php';
             $url3 = 'http://' . $_SERVER['HTTP_HOST'] . '/Projeto_Final_PHP/view/post.php';
             $url4 = 'http://' . $_SERVER['HTTP_HOST'] . '/Projeto_Final_PHP/view/notify.php';
-            // logout controller (ajuste se seu logout estiver em outro lugar)
             $logoutUrl = 'http://' . $_SERVER['HTTP_HOST'] . '/Projeto_Final_PHP/services/logout.php';
             $perfilUrl = 'http://' . $_SERVER['HTTP_HOST'] . '/Projeto_Final_PHP/view/perfil.php';
 
             $username = htmlspecialchars($_SESSION['nome'] ?? 'Usuário', ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
 
-            // Normaliza avatar URL com a função utilitária
-            $stored = $_SESSION['avatar_url'] ?? '';
-            $avatar_url = avatar_url_web($stored);
+            // Normaliza avatar URL com a função utilitária (passando user id)
+            $stored = $_SESSION['id'] ?? '';
+            $avatar_url = avatar_url_web((string)$stored);
 
             echo <<<HTML
-            <a class="icon-btn" href="$url4" aria-label="Notificações" title="Notificações">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
-                <path d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6 6 0 10-12 0v3.159c0 .538-.214 1.055-.595 1.436L4 17h5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
-                <path d="M13.73 21a2 2 0 01-3.46 0" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
-              </svg>
-            </a>
 
             <a class="icon-btn" href="$url2" aria-label="Mensagens" title="Mensagens">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
@@ -262,7 +254,6 @@ if (!isset($_SESSION['id']) && isset($_COOKIE['remember_me'])) {
               </svg>
             </a>
 
-            <!-- botão principal (ex: publicar/tweet) -->
             <a href="$url3">
               <button class="btn" type="button" aria-label="Novo post">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
@@ -272,7 +263,6 @@ if (!isset($_SESSION['id']) && isset($_COOKIE['remember_me'])) {
               </button>
             </a>
 
-            <!-- avatar + nome: substituído pelo wrapper que contém o trigger e o dropdown que abre para baixo -->
             <div class="user-menu-wrap" style="margin-left:8px; display:inline-block; vertical-align:middle;">
               <button id="user-menu-trigger" class="icon-btn" aria-haspopup="true" aria-expanded="false" style="display:flex;align-items:center;gap:8px; background:transparent; border:0; padding:6px; cursor:pointer;">
                 <span style="font-weight:bold;margin-right:6px;">$username</span>
@@ -281,7 +271,6 @@ if (!isset($_SESSION['id']) && isset($_COOKIE['remember_me'])) {
                 </span>
               </button>
 
-              <!-- menu inicialmente escondido; será posicionado abaixo do trigger -->
               <div id="user-menu" class="user-menu" aria-hidden="true" role="menu" tabindex="-1">
                   <div class="menu-item">
                       <label class="toggle" style="display:flex;align-items:center;gap:8px;cursor:pointer">
@@ -308,7 +297,6 @@ if (!isset($_SESSION['id']) && isset($_COOKIE['remember_me'])) {
             $url2 = 'http://' . $_SERVER['HTTP_HOST'] . '/Projeto_Final_PHP/view/register.php';
 
             echo <<<HTML
-              <!-- botão Login -->
               <a class="icon-btn" href="$url" aria-label="Perfil" title="Perfil">
                 <button class="btn" type="button" aria-label="Login_btn">
                   <span>Login</span>
@@ -338,7 +326,6 @@ if (!isset($_SESSION['id']) && isset($_COOKIE['remember_me'])) {
   let timer = null;
   let lastQ = '';
 
-  // cria nó visual de resultado
   function createResultNode(item) {
     const el = document.createElement('div');
     el.className = 'search-result';
@@ -399,7 +386,6 @@ if (!isset($_SESSION['id']) && isset($_COOKIE['remember_me'])) {
 
     el.addEventListener('click', function(){
       if (item.type === 'level') {
-        // envia POST para level.php com select_level contendo o JSON (campo level_json do resultado)
         const form = document.createElement('form');
         form.method = 'POST';
         form.action = '<?php echo 'http://' . $_SERVER['HTTP_HOST'] . '/Projeto_Final_PHP/view/level.php'; ?>';
@@ -411,7 +397,6 @@ if (!isset($_SESSION['id']) && isset($_COOKIE['remember_me'])) {
         document.body.appendChild(form);
         form.submit();
       } else if (item.type === 'user') {
-        // vai para perfil.php (placeholder)
         window.location.href = '<?php echo 'http://' . $_SERVER['HTTP_HOST'] . '/Projeto_Final_PHP/view/perfil.php'; ?>?user_id=' + encodeURIComponent(item.id);
       }
     });
@@ -451,7 +436,6 @@ if (!isset($_SESSION['id']) && isset($_COOKIE['remember_me'])) {
     }
   }
 
-  // debounce handler
   input.addEventListener('input', function(){
     const q = input.value.trim();
     if (q === lastQ) return;
@@ -460,14 +444,12 @@ if (!isset($_SESSION['id']) && isset($_COOKIE['remember_me'])) {
     timer = setTimeout(() => doSearch(q), 220);
   });
 
-  // hide when clicking outside
   document.addEventListener('click', function(e){
     if (!resultsBox.contains(e.target) && e.target !== input) {
       clearResults();
     }
   });
 
-  // keyboard navigation (opcional básico)
   let focused = -1;
   input.addEventListener('keydown', function(e){
     const items = Array.from(resultsBox.querySelectorAll('.search-result'));
@@ -488,7 +470,7 @@ if (!isset($_SESSION['id']) && isset($_COOKIE['remember_me'])) {
     }
   });
 
-  // ---------- MENU DO AVATAR (top-down) ----------
+  // Avatar menu + theme toggle handling (mantive seu código)
   document.addEventListener('DOMContentLoaded', () => {
     const trigger = document.getElementById('user-menu-trigger');
     const menu = document.getElementById('user-menu');
@@ -496,12 +478,10 @@ if (!isset($_SESSION['id']) && isset($_COOKIE['remember_me'])) {
 
     if (!trigger || !menu) return;
 
-    // estado inicial
     menu.classList.remove('open');
     menu.setAttribute('aria-hidden', 'true');
     trigger.setAttribute('aria-expanded', 'false');
 
-    // posição do menu centralizada no trigger (ajusta para não vazar da viewport)
     function positionMenu() {
       const trigRect = trigger.getBoundingClientRect();
       const wrap = trigger.closest('.user-menu-wrap');
@@ -512,7 +492,6 @@ if (!isset($_SESSION['id']) && isset($_COOKIE['remember_me'])) {
       menu.style.left = leftCenter + 'px';
       menu.style.top = (trigRect.bottom - wrapRect.top + 8) + 'px';
 
-      // evita overflow horizontal
       const viewportWidth = document.documentElement.clientWidth || window.innerWidth;
       const absoluteLeft = wrapRect.left + leftCenter - (menuRect.width / 2 || 90);
 
@@ -533,7 +512,6 @@ if (!isset($_SESSION['id']) && isset($_COOKIE['remember_me'])) {
         menu.classList.add('open');
         menu.setAttribute('aria-hidden', 'false');
         trigger.setAttribute('aria-expanded', 'true');
-        // set toggle checkbox initial state according to body class
         if (toggleTheme) toggleTheme.checked = document.body.classList.contains('theme-dark');
       } else {
         menu.classList.remove('open');
@@ -542,7 +520,6 @@ if (!isset($_SESSION['id']) && isset($_COOKIE['remember_me'])) {
       }
     });
 
-    // fechar ao clicar fora
     document.addEventListener('click', (e) => {
       if (!menu.contains(e.target) && !trigger.contains(e.target)) {
         menu.classList.remove('open');
@@ -551,7 +528,6 @@ if (!isset($_SESSION['id']) && isset($_COOKIE['remember_me'])) {
       }
     });
 
-    // ESC fecha
     document.addEventListener('keydown', (e) => {
       if (e.key === 'Escape') {
         menu.classList.remove('open');
@@ -560,21 +536,18 @@ if (!isset($_SESSION['id']) && isset($_COOKIE['remember_me'])) {
       }
     });
 
-    // reposiciona ao redimensionar/scroll
     window.addEventListener('resize', () => { if (menu.classList.contains('open')) positionMenu(); });
     window.addEventListener('scroll', () => { if (menu.classList.contains('open')) positionMenu(); }, true);
 
-    // troca de tema (preserva outras classes do body)
     if (toggleTheme) {
       toggleTheme.checked = document.body.classList.contains('theme-dark');
       toggleTheme.addEventListener('change', () => {
         const isDark = toggleTheme.checked;
-        // altera apenas a classe theme-dark (preservando outras)
         const classes = new Set(document.body.className.split(/\s+/).filter(Boolean));
         if (isDark) classes.add('theme-dark'); else classes.delete('theme-dark');
         document.body.className = Array.from(classes).join(' ');
+        document.documentElement.className = Array.from(classes).join(' ');
 
-        // salva no backend (ajuste o caminho se necessário)
         fetch('<?php echo 'http://' . $_SERVER['HTTP_HOST'] . '/Projeto_Final_PHP/controller/update_theme.php'; ?>', {
           method: 'POST',
           headers: { 'Content-Type': 'application/x-www-form-urlencoded' },

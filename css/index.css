@@ -81,6 +81,10 @@ html, body {
   font-size: 16px;
 }
 
+html.theme-dark{
+  background-color:#0f1724;
+}
+
 /* Container padrão */
 .container {
   max-width: var(--max-width);

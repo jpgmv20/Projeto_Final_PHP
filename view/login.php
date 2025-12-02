@@ -1,3 +1,7 @@
+<?php
+// view/login.php
+session_start();
+?>
 <!doctype html>
 <html lang="pt-BR">
 <head>
@@ -6,7 +10,7 @@
   <title>Login</title>
   <link rel="stylesheet" href="../css/index.css">
 </head>
-<body class="<?PHP $config = $_SESSION['config']['tema'] ?? ""; echo $config ?>">
+<body class="<?php $config = $_SESSION['config']['tema'] ?? ""; echo htmlspecialchars($config); ?>">
   <main>
     <section class="login-page" aria-labelledby="login-title">
       <div class="container">
@@ -20,6 +24,20 @@
               </p>
             </div>
           </div>
+
+          <?php if (!empty($_SESSION['error'])): ?>
+            <div style="color:#b32039;padding:8px;border-radius:6px;margin:8px 0;background:rgba(179,32,57,0.06);">
+              <?= htmlspecialchars($_SESSION['error']) ?>
+            </div>
+            <?php unset($_SESSION['error']); ?>
+          <?php endif; ?>
+
+          <?php if (!empty($_SESSION['success'])): ?>
+            <div style="color:#0b6620;padding:8px;border-radius:6px;margin:8px 0;background:rgba(11,102,32,0.06);">
+              <?= htmlspecialchars($_SESSION['success']) ?>
+            </div>
+            <?php unset($_SESSION['success']); ?>
+          <?php endif; ?>
 
           <form class="login-form" action="../controller/controller_login.php" method="post">
             <div>
@@ -52,5 +70,3 @@
   <?php include_once('../footer.php');?>
 </body>
 </html>
-
-

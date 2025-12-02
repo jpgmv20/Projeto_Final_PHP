@@ -24,8 +24,9 @@ CREATE TABLE IF NOT EXISTS users
   descricao VARCHAR(512),                          
   email VARCHAR(500) NOT NULL UNIQUE,              
   password VARCHAR(80) NOT NULL,                  -- hash da senha (bcrypt)
-  avatar_url VARCHAR(1024),                        -- link para avatar 
-  config JSON,                                     -- preferências (tema, idioma, ...)
+  image_type varchar(10),						  -- tipo de imagem
+  avatar_image LONGBLOB,                          -- imagem para avatar 
+  config JSON,                                    -- preferências (tema, idioma, ...)
   followers_count INT UNSIGNED NOT NULL DEFAULT 0, 
   following_count INT UNSIGNED NOT NULL DEFAULT 0, 
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,  -- criado em

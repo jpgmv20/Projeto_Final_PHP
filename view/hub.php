@@ -1,26 +1,23 @@
 <?php
+// view/hub.php (adaptado para BLOB avatars via controller/get_avatar.php)
 require_once __DIR__ . '/../services/config.php';
 session_start();
-
-/* ---------- redireciona se não estiver logado (proteção contra acesso por URL) ---------- */
+/* ---------- redireciona se não estiver logado (proteção contra acesso por URL) ----------
+   no seu código original o redirect estava comentado; deixei comentado também para testes
+*/
 if (empty($_SESSION['id'])) {
     header('Location: ../index.php');
     exit;
 }
 
-/* ---------------- avatar helper (adaptado do seu exemplo) ---------------- */
+/* ---------------- avatar helper (usando endpoint que entrega BLOB) ---------------- */
 if (!function_exists('avatar_url_web')) {
-    function avatar_url_web(string $path = ''): string {
+    function avatar_url_web(string $user_id = ''): string {
         $default = 'image/images.jfif';
-        if (empty($path)) {
+        if (empty($user_id)) {
             return 'http://' . $_SERVER['HTTP_HOST'] . '/Projeto_Final_PHP/' . $default;
         }
-        if (preg_match('#^https?://#i', $path)) {
-            return $path;
-        }
-        $p = ltrim($path, '/');
-        $p = preg_replace('#^(?:Projeto_Final_PHP/)+#i', '', $p);
-        return 'http://' . $_SERVER['HTTP_HOST'] . '/Projeto_Final_PHP/' . $p;
+        return 'http://' . $_SERVER['HTTP_HOST'] . '/Projeto_Final_PHP/controller/get_avatar.php?id=' . intval($user_id);
     }
 }
 
@@ -69,18 +66,18 @@ CREATE TABLE IF NOT EXISTS conversation_messages (
 function e($s){ return htmlspecialchars($s ?? '', ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); }
 
 /* ---------------- current user (usando sessão existente) ---------------- */
-$currentUserId = (int)$_SESSION['id'];
+$currentUserId = isset($_SESSION['id']) ? (int)$_SESSION['id'] : 0;
 $currentUserName = $_SESSION['nome'] ?? 'Usuário';
-$currentUserAvatar = avatar_url_web($_SESSION['avatar_url'] ?? '');
+$currentUserAvatar = avatar_url_web($_SESSION['id'] ?? '');
 
-/* ---------------- get_user_suggestions (comportamento: não retorna 5 primeiros se vazio) ---------------- */
+/* ---------------- get_user_suggestions ---------------- */
 function get_user_suggestions(mysqli $mysqli, ?string $query, int $limit = 10, int $exclude_user_id = 0) {
     $out = [];
     if ($query === null) return $out;
     $q = trim($query);
     if ($q === '') return $out;
     $like = '%' . $q . '%';
-    $stmt = $mysqli->prepare("SELECT id, nome, avatar_url, email FROM users WHERE (nome LIKE ? OR email LIKE ?) AND id != ? ORDER BY nome LIMIT ?");
+    $stmt = $mysqli->prepare("SELECT id, nome, email FROM users WHERE (nome LIKE ? OR email LIKE ?) AND id != ? ORDER BY nome LIMIT ?");
     if (!$stmt) return $out;
     $stmt->bind_param('ssis', $like, $like, $exclude_user_id, $limit);
     $stmt->execute();
@@ -146,7 +143,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'send'
 
     $mysqli->begin_transaction();
 
-    // gravamos read_by como JSON string contendo o id do remetente (marcado como lido por quem enviou)
     $initRead = json_encode([$currentUserId], JSON_UNESCAPED_UNICODE);
 
     $stmt = $mysqli->prepare("INSERT INTO conversation_messages (conversation_id, sender_id, content, read_by) VALUES (?, ?, ?, ?)");
@@ -174,7 +170,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'send'
     exit;
 }
 
-/* ---------------- AJAX endpoints (com checagens de isset) ---------------- */
+/* ---------------- AJAX endpoints ---------------- */
 if (isset($_GET['ajax'])) {
     header('Content-Type: application/json; charset=utf-8');
     $ajax = $_GET['ajax'];
@@ -217,11 +213,11 @@ if (isset($_GET['ajax'])) {
             if (count($members)) {
                 foreach ($members as $memb) {
                     if ((int)$memb['id'] !== $currentUserId) {
-                        $avatar = avatar_url_web($memb['avatar_url'] ?? '');
+                        $avatar = avatar_url_web($memb['id'] ?? '');
                         break;
                     }
                 }
-                if ($avatar === '') $avatar = avatar_url_web($members[0]['avatar_url'] ?? '');
+                if ($avatar === '') $avatar = avatar_url_web($members[0]['id'] ?? '');
             } else {
                 $avatar = avatar_url_web('');
             }
@@ -247,9 +243,6 @@ if (isset($_GET['ajax'])) {
             exit;
         }
 
-        // Marcamos as mensagens como lidas por este usuário — sem usar JSON SQL:
-        // 1) selecionamos mensagens do conv onde sender != currentUser
-        // 2) para cada mensagem, decodificamos read_by, adicionamos o id se não estiver presente e atualizamos com JSON string
         $sel = $mysqli->prepare("SELECT id, read_by, sender_id FROM conversation_messages WHERE conversation_id = ? AND sender_id != ?");
         $sel->bind_param('ii', $convId, $currentUserId);
         $sel->execute();
@@ -275,8 +268,8 @@ if (isset($_GET['ajax'])) {
         }
         $sel->close();
 
-        // Agora selecionamos e retornamos as mensagens normalmente
-        $mstmt = $mysqli->prepare("SELECT cm.*, u.nome AS sender_name, u.avatar_url AS sender_avatar FROM conversation_messages cm LEFT JOIN users u ON u.id = cm.sender_id WHERE cm.conversation_id = ? ORDER BY cm.created_at ASC");
+        // retorna mensagens com avatar baseado em sender_id
+        $mstmt = $mysqli->prepare("SELECT cm.*, u.nome AS sender_name FROM conversation_messages cm LEFT JOIN users u ON u.id = cm.sender_id WHERE cm.conversation_id = ? ORDER BY cm.created_at ASC");
         $mstmt->bind_param('i', $convId);
         $mstmt->execute();
         $mres = $mstmt->get_result();
@@ -286,7 +279,8 @@ if (isset($_GET['ajax'])) {
                 'id' => (int)$m['id'],
                 'sender_id' => (int)$m['sender_id'],
                 'sender_name' => $m['sender_name'],
-                'sender_avatar' => avatar_url_web($m['sender_avatar'] ?? ''),
+                // use sender_id to build avatar URL
+                'sender_avatar' => avatar_url_web($m['sender_id'] ?? ''),
                 'content' => $m['content'],
                 'created_at' => $m['created_at'],
             ];
@@ -298,7 +292,7 @@ if (isset($_GET['ajax'])) {
     }
 
     if ($ajax === 'all_users') {
-        $q = $mysqli->prepare("SELECT id, nome, avatar_url, email FROM users WHERE id != ? ORDER BY nome");
+        $q = $mysqli->prepare("SELECT id, nome, email FROM users WHERE id != ? ORDER BY nome");
         $q->bind_param('i', $currentUserId);
         $q->execute();
         $r = $q->get_result();
@@ -308,7 +302,7 @@ if (isset($_GET['ajax'])) {
                 'id' => (int)$row['id'],
                 'nome' => $row['nome'],
                 'email' => $row['email'],
-                'avatar' => avatar_url_web($row['avatar_url'] ?? '')
+                'avatar' => avatar_url_web($row['id'] ?? '')
             ];
         }
         $q->close();
@@ -322,7 +316,6 @@ if (isset($_GET['ajax'])) {
 
 /* ---------------- count_unread & get_convo_members ---------------- */
 function count_unread(mysqli $mysqli, $conversation_id, $user_id) {
-    // Não usamos JSON SQL: buscamos mensagens e contamos em PHP
     $sql = "SELECT id, read_by, sender_id FROM conversation_messages WHERE conversation_id = ? AND sender_id != ?";
     $stmt = $mysqli->prepare($sql);
     if (!$stmt) return 0;
@@ -344,7 +337,7 @@ function count_unread(mysqli $mysqli, $conversation_id, $user_id) {
 }
 
 function get_convo_members(mysqli $mysqli, $conversation_id) {
-    $q = $mysqli->prepare("SELECT u.id, u.nome, u.avatar_url FROM users u JOIN conversation_participants cp ON cp.user_id = u.id WHERE cp.conversation_id = ?");
+    $q = $mysqli->prepare("SELECT u.id, u.nome FROM users u JOIN conversation_participants cp ON cp.user_id = u.id WHERE cp.conversation_id = ?");
     $q->bind_param('i', $conversation_id);
     $q->execute();
     $res = $q->get_result();
@@ -435,7 +428,7 @@ if ($currentConvId) {
     }
     $sel->close();
 
-    $mstmt = $mysqli->prepare("SELECT cm.*, u.nome AS sender_name, u.avatar_url AS sender_avatar FROM conversation_messages cm LEFT JOIN users u ON u.id = cm.sender_id WHERE cm.conversation_id = ? ORDER BY cm.created_at ASC");
+    $mstmt = $mysqli->prepare("SELECT cm.*, u.nome AS sender_name FROM conversation_messages cm LEFT JOIN users u ON u.id = cm.sender_id WHERE cm.conversation_id = ? ORDER BY cm.created_at ASC");
     $mstmt->bind_param('i', $currentConvId);
     $mstmt->execute();
     $mres = $mstmt->get_result();
@@ -525,7 +518,7 @@ unset($_SESSION['flash_success'], $_SESSION['flash_error']);
             foreach ($userResults as $u): ?>
               <a class="chat-item user-result" href="?start_conversation_with=<?php echo (int)$u['id']; ?>">
                 <div class="chat-avatar">
-                  <img src="<?php echo e(avatar_url_web($u['avatar_url'] ?? '')); ?>" alt="avatar">
+                  <img src="<?php echo e(avatar_url_web($u['id'] ?? '')); ?>" alt="avatar">
                 </div>
                 <div class="chat-body">
                   <div class="chat-top">
@@ -548,11 +541,11 @@ unset($_SESSION['flash_success'], $_SESSION['flash_error']);
               if (count($members)) {
                   foreach ($members as $memb) {
                       if ((int)$memb['id'] !== $currentUserId) {
-                          $avatar = avatar_url_web($memb['avatar_url'] ?? '');
+                          $avatar = avatar_url_web($memb['id'] ?? '');
                           break;
                       }
                   }
-                  if ($avatar === '') $avatar = avatar_url_web($members[0]['avatar_url'] ?? '');
+                  if ($avatar === '') $avatar = avatar_url_web($members[0]['id'] ?? '');
               } else {
                   $avatar = avatar_url_web('');
               }
@@ -599,28 +592,17 @@ unset($_SESSION['flash_success'], $_SESSION['flash_error']);
                   break;
               }
           }
-          // se não achou outro (p.ex. conversa consigo mesmo), pega o primeiro
           if ($otherUser === null) {
               $otherUser = $members[0];
           }
       }
 
-      // título: usa título da conversa, senão nome do outro usuário, senão 'Chat'
       $title = $currentConv['title'] ?: ($otherUser['nome'] ?? 'Chat');
-
-      // avatar do outro usuário (normalizado)
-      $otherAvatarUrl = $otherUser['avatar_url'] ?? '';
-      $otherAvatarUrl = avatar_url_web($otherAvatarUrl);
+      $otherAvatarUrl = avatar_url_web($otherUser['id'] ?? '');
     ?>
-    <!-- mostra avatar do outro usuário; fallback para inicial se não existir -->
     <div class="avatar medium" style="width:48px;height:48px;border-radius:8px;overflow:hidden;flex:0 0 auto;">
-      <?php if (!empty($otherUser['avatar_url'])): ?>
-        <img src="<?php echo e($otherAvatarUrl); ?>" alt="Avatar <?php echo e($otherUser['nome'] ?? ''); ?>" style="width:100%;height:100%;object-fit:cover;display:block">
-      <?php else: ?>
-        <div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:#dfe9f9;color:#0b66b2;font-weight:700;font-size:1.2rem;">
-          <?php echo e(strtoupper(substr(($otherUser['nome'] ?? $title), 0, 1))); ?>
-        </div>
-      <?php endif; ?>
+      <!-- sempre mostramos a imagem via get_avatar (ele deve devolver fallback caso não haja blob) -->
+      <img src="<?php echo e($otherAvatarUrl); ?>" alt="Avatar <?php echo e($otherUser['nome'] ?? ''); ?>" style="width:100%;height:100%;object-fit:cover;display:block">
     </div>
 
     <div>
@@ -630,13 +612,12 @@ unset($_SESSION['flash_success'], $_SESSION['flash_error']);
   </div>
 </header>
 
-
         <section class="messages" id="messages">
           <?php foreach ($messages as $m):
               $isMe = ((int)$m['sender_id'] === $currentUserId);
           ?>
             <div class="message-row <?php echo $isMe ? 'me' : 'them'; ?>">
-              <?php if (!$isMe): ?><div class="msg-avatar"><img src="<?php echo e(avatar_url_web($m['sender_avatar'] ?? '')); ?>" alt="avatar" style="width:36px;height:36px;border-radius:50%;object-fit:cover"></div><?php endif; ?>
+              <?php if (!$isMe): ?><div class="msg-avatar"><img src="<?php echo e(avatar_url_web($m['sender_id'] ?? '')); ?>" alt="avatar" style="width:36px;height:36px;border-radius:50%;object-fit:cover"></div><?php endif; ?>
               <div class="msg-bubble">
                 <?php if (!empty($m['content'])): ?><div class="msg-text"><?php echo nl2br(e($m['content'])); ?></div><?php endif; ?>
                 <div class="msg-time" style="font-size:0.75rem;color:var(--muted);margin-top:6px"><?php echo e(date('d/m H:i', strtotime($m['created_at']))); ?></div>

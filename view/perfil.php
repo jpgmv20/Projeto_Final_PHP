@@ -1,28 +1,24 @@
 <?php
 // view/perfil.php
-// Perfil de usuário com edição de descrição, levels clicáveis e like toggle
 require_once __DIR__ . '/../services/config.php';
-session_start();
+if (session_status() === PHP_SESSION_NONE) session_start();
 
-/* -----------------------
-   Helpers
-   ----------------------- */
+/* Helpers */
 function h($s) {
     return htmlspecialchars($s ?? '', ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
 }
 
 if (!function_exists('avatar_url_web')) {
-    function avatar_url_web(string $path = ''): string {
+    function avatar_url_web($user_or_path = ''): string {
         $default = 'image/images.jfif';
-        if (empty($path)) {
-            return 'http://' . $_SERVER['HTTP_HOST'] . '/Projeto_Final_PHP/' . $default;
-        }
-        if (preg_match('#^https?://#i', $path)) {
-            return $path;
-        }
-        $p = ltrim($path, '/');
+        $host = $_SERVER['HTTP_HOST'] ?? 'localhost';
+        $base = 'http://' . $host . '/Projeto_Final_PHP/';
+        if ($user_or_path === null || $user_or_path === '') return $base . $default;
+        if (is_numeric($user_or_path) && intval($user_or_path) > 0) return $base . 'controller/get_avatar.php?id=' . intval($user_or_path);
+        if (preg_match('#^https?://#i', (string)$user_or_path)) return (string)$user_or_path;
+        $p = ltrim((string)$user_or_path, '/');
         $p = preg_replace('#^(?:Projeto_Final_PHP/)+#i', '', $p);
-        return 'http://' . $_SERVER['HTTP_HOST'] . '/Projeto_Final_PHP/' . $p;
+        return $base . $p;
     }
 }
 
@@ -36,23 +32,20 @@ function difficulty_color($d) {
         default: return '#6b7280';
     }
 }
-
 function cell_bg_color($colorName) {
     if (!$colorName) return '#ffffff';
     $c = strtolower($colorName);
     switch ($c) {
-        case 'red':    case 'vermelho': return '#f87171';
-        case 'green':  case 'verde':    return '#34d399';
-        case 'blue':   case 'azul':     return '#60a5fa';
-        case 'yellow': case 'amarelo':  return '#fbbf24';
-        case 'gray':   case 'cinza':    return '#e5e7eb';
+        case 'red': case 'vermelho': return '#f87171';
+        case 'green': case 'verde': return '#34d399';
+        case 'blue': case 'azul': return '#60a5fa';
+        case 'yellow': case 'amarelo': return '#fbbf24';
+        case 'gray': case 'cinza': return '#e5e7eb';
         default: return $colorName;
     }
 }
 
-/* -----------------------
-   Conexão DB & variáveis iniciais
-   ----------------------- */
+/* DB */
 $mysqli = connect_mysql();
 if (!$mysqli) {
     echo '<div style="padding:20px;color:#b32039">Erro ao conectar ao banco de dados.</div>';
@@ -61,102 +54,59 @@ if (!$mysqli) {
 
 $currentUserId = isset($_SESSION['id']) ? (int)$_SESSION['id'] : 0;
 
-/* -----------------------
-   Processa POST actions (antes de qualquer saída)
-   - actions suportadas: follow, unfollow, update_description, like_toggle
-   ----------------------- */
+/* POST actions (follow/unfollow, update_description, like_toggle) */
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    // ação: follow / unfollow
+    // follow/unfollow
     if (isset($_POST['action']) && isset($_POST['target_user_id'])) {
         $action = $_POST['action'];
         $postTarget = (int)$_POST['target_user_id'];
-
         if ($action === 'follow' || $action === 'unfollow') {
-            if ($currentUserId <= 0) {
-                header('Location: /Projeto_Final_PHP/view/login.php');
-                exit;
-            }
-            if ($postTarget === $currentUserId) {
-                header('Location: /Projeto_Final_PHP/view/perfil.php?user_id=' . $postTarget);
-                exit;
-            }
-
+            if ($currentUserId <= 0) { header('Location: /Projeto_Final_PHP/view/login.php'); exit; }
+            if ($postTarget === $currentUserId) { header('Location: /Projeto_Final_PHP/view/perfil.php?user_id=' . $postTarget); exit; }
             if ($action === 'follow') {
                 $stmt = $mysqli->prepare("INSERT IGNORE INTO followers (follower_id, user_id) VALUES (?, ?)");
-                if ($stmt) {
-                    $stmt->bind_param('ii', $currentUserId, $postTarget);
-                    $stmt->execute();
-                    $stmt->close();
-                }
-            } else { // unfollow
+                if ($stmt) { $stmt->bind_param('ii', $currentUserId, $postTarget); $stmt->execute(); $stmt->close(); }
+            } else {
                 $stmt = $mysqli->prepare("DELETE FROM followers WHERE follower_id = ? AND user_id = ?");
-                if ($stmt) {
-                    $stmt->bind_param('ii', $currentUserId, $postTarget);
-                    $stmt->execute();
-                    $stmt->close();
-                }
+                if ($stmt) { $stmt->bind_param('ii', $currentUserId, $postTarget); $stmt->execute(); $stmt->close(); }
             }
-
             header('Location: /Projeto_Final_PHP/view/perfil.php?user_id=' . $postTarget);
             exit;
         }
     }
 
-    // ação: update_description (apenas se for dono do perfil)
+    // update_description
     if (isset($_POST['action']) && $_POST['action'] === 'update_description' && isset($_POST['target_user_id'])) {
         $postTarget = (int)$_POST['target_user_id'];
         $desc = trim((string)($_POST['description'] ?? ''));
-
-        if ($currentUserId <= 0) {
-            header('Location: /Projeto_Final_PHP/view/login.php');
-            exit;
-        }
+        if ($currentUserId <= 0) { header('Location: /Projeto_Final_PHP/view/login.php'); exit; }
         if ($postTarget === $currentUserId) {
             $stmt = $mysqli->prepare("UPDATE users SET descricao = ? WHERE id = ?");
-            if ($stmt) {
-                $stmt->bind_param('si', $desc, $currentUserId);
-                $stmt->execute();
-                $stmt->close();
-            }
+            if ($stmt) { $stmt->bind_param('si', $desc, $currentUserId); $stmt->execute(); $stmt->close(); }
         }
         header('Location: /Projeto_Final_PHP/view/perfil.php?user_id=' . $postTarget);
         exit;
     }
 
-    // ação: like_toggle (user likes/unlikes a level)
+    // like_toggle
     if (isset($_POST['action']) && $_POST['action'] === 'like_toggle' && isset($_POST['level_id'])) {
         $levelId = (int)$_POST['level_id'];
-        if ($currentUserId <= 0) {
-            header('Location: /Projeto_Final_PHP/view/login.php');
-            exit;
-        }
-        // verifica se já curtiu
+        if ($currentUserId <= 0) { header('Location: /Projeto_Final_PHP/view/login.php'); exit; }
         $q = $mysqli->prepare("SELECT 1 FROM likes WHERE user_id = ? AND level_id = ? LIMIT 1");
-        $q->bind_param('ii', $currentUserId, $levelId);
-        $q->execute();
-        $res = $q->get_result();
-        $already = (bool)$res->fetch_row();
-        $q->close();
-
-        if ($already) {
-            // remove like
-            $d = $mysqli->prepare("DELETE FROM likes WHERE user_id = ? AND level_id = ?");
-            if ($d) {
-                $d->bind_param('ii', $currentUserId, $levelId);
-                $d->execute();
-                $d->close();
-            }
-        } else {
-            // adiciona like (INSERT IGNORE por segurança)
-            $i = $mysqli->prepare("INSERT IGNORE INTO likes (user_id, level_id) VALUES (?, ?)");
-            if ($i) {
-                $i->bind_param('ii', $currentUserId, $levelId);
-                $i->execute();
-                $i->close();
+        if ($q) {
+            $q->bind_param('ii', $currentUserId, $levelId);
+            $q->execute();
+            $res = $q->get_result();
+            $already = (bool)$res->fetch_row();
+            $q->close();
+            if ($already) {
+                $d = $mysqli->prepare("DELETE FROM likes WHERE user_id = ? AND level_id = ?");
+                if ($d) { $d->bind_param('ii', $currentUserId, $levelId); $d->execute(); $d->close(); }
+            } else {
+                $i = $mysqli->prepare("INSERT IGNORE INTO likes (user_id, level_id) VALUES (?, ?)");
+                if ($i) { $i->bind_param('ii', $currentUserId, $levelId); $i->execute(); $i->close(); }
             }
         }
-
-        // redireciona de volta ao perfil (evita re-post)
         $redir = '/Projeto_Final_PHP/view/perfil.php';
         if (isset($_POST['redir_user_id'])) $redir .= '?user_id=' . (int)$_POST['redir_user_id'];
         header('Location: ' . $redir);
@@ -164,15 +114,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-/* -----------------------
-   A partir daqui podemos incluir header e renderizar HTML
-   ----------------------- */
-/* NOTA: deixei o include do header aqui (antes do HTML principal) pois header.php já gera o <head> e o header da página */
+/* Inclui header (ele usa avatar_url_web($_SESSION['id']) ) */
 include __DIR__ . '/../header.php';
 
-/* -----------------------
-   Determina qual perfil mostrar
-   ----------------------- */
+/* Determina qual perfil mostrar */
 $targetUserId = isset($_GET['user_id']) ? (int)$_GET['user_id'] : ($currentUserId ?: 0);
 if ($targetUserId <= 0) {
     echo '<main class="container" role="main" style="padding:32px;"><div style="color:#b32039">Perfil inválido.</div></main>';
@@ -180,10 +125,13 @@ if ($targetUserId <= 0) {
     exit;
 }
 
-/* -----------------------
-   Busca dados do usuário alvo
-   ----------------------- */
-$stmt = $mysqli->prepare("SELECT id, nome, descricao, avatar_url, followers_count, following_count, created_at FROM users WHERE id = ? LIMIT 1");
+/* Busca dados do usuário alvo (não precisamos puxar blob aqui, só metadados) */
+$stmt = $mysqli->prepare("SELECT id, nome, descricao, followers_count, following_count, created_at FROM users WHERE id = ? LIMIT 1");
+if (!$stmt) {
+    echo '<main class="container" role="main" style="padding:32px;"><div style="color:#b32039">Erro no banco (perfil).</div></main>';
+    include __DIR__ . '/../footer.php';
+    exit;
+}
 $stmt->bind_param('i', $targetUserId);
 $stmt->execute();
 $res = $stmt->get_result();
@@ -196,24 +144,23 @@ if (!$user) {
     exit;
 }
 
-$avatarUrl = avatar_url_web($user['avatar_url'] ?? '');
+/* Avatar via get_avatar.php?id=... */
+$avatarUrl = avatar_url_web((int)$user['id']);
 
-/* -----------------------
-   Verifica se o usuário logado já segue o perfil
-   ----------------------- */
+/* Verifica se o usuário logado já segue o perfil */
 $isFollowing = false;
 if ($currentUserId && $currentUserId !== (int)$user['id']) {
     $q = $mysqli->prepare("SELECT 1 FROM followers WHERE follower_id = ? AND user_id = ? LIMIT 1");
-    $q->bind_param('ii', $currentUserId, $targetUserId);
-    $q->execute();
-    $r = $q->get_result();
-    $isFollowing = (bool)$r->fetch_row();
-    $q->close();
+    if ($q) {
+        $q->bind_param('ii', $currentUserId, $targetUserId);
+        $q->execute();
+        $r = $q->get_result();
+        $isFollowing = (bool)$r->fetch_row();
+        $q->close();
+    }
 }
 
-/* -----------------------
-   Busca níveis do usuário (com level_json)
-   ----------------------- */
+/* Busca níveis do usuário (com level_json) */
 $lvlStmt = $mysqli->prepare("SELECT id, title, descricao, difficulty, likes_count, plays_count, level_json, created_at FROM levels WHERE author_id = ? ORDER BY created_at DESC");
 $lvlStmt->bind_param('i', $targetUserId);
 $lvlStmt->execute();
@@ -221,37 +168,31 @@ $lvlRes = $lvlStmt->get_result();
 $levelsList = $lvlRes->fetch_all(MYSQLI_ASSOC);
 $lvlStmt->close();
 
-/* -----------------------
-   Para otimizar checks de like, busca todos likes do user para os levels listados
-   ----------------------- */
+/* Para otimizar checks de like, busca todos likes do user para os levels listados */
 $userLiked = [];
 if ($currentUserId && !empty($levelsList)) {
     $levelIds = array_map(function($l){ return (int)$l['id']; }, $levelsList);
-    // build placeholders
     $placeholders = implode(',', array_fill(0, count($levelIds), '?'));
     $types = str_repeat('i', count($levelIds) + 1);
     $sql = "SELECT level_id FROM likes WHERE user_id = ? AND level_id IN ($placeholders)";
     $stmt = $mysqli->prepare($sql);
-    // bind params dynamically
-    $params = array_merge([$currentUserId], $levelIds);
-    $refs = [];
-    foreach ($params as $i => $v) $refs[$i] = &$params[$i];
-    call_user_func_array([$stmt, 'bind_param'], array_merge([ $types ], $refs));
-    $stmt->execute();
-    $res = $stmt->get_result();
-    while ($r = $res->fetch_assoc()) $userLiked[(int)$r['level_id']] = true;
-    $stmt->close();
+    if ($stmt) {
+        $params = array_merge([$currentUserId], $levelIds);
+        $refs = [];
+        foreach ($params as $i => $v) $refs[$i] = &$params[$i];
+        call_user_func_array([$stmt, 'bind_param'], array_merge([ $types ], $refs));
+        $stmt->execute();
+        $res = $stmt->get_result();
+        while ($r = $res->fetch_assoc()) $userLiked[(int)$r['level_id']] = true;
+        $stmt->close();
+    }
 }
 
-/* -----------------------
-   Render
-   ----------------------- */
+/* Render HTML */
 ?>
 <body class="<?php echo $_SESSION['config']['tema'] ?? "" ?>">
 
-<!-- Ajuste dinâmico do título da aba com o nome do usuário -->
 <script>
-  // define o título do documento com o nome do usuário + " - Perfil"
   document.title = <?= json_encode(($user['nome'] ?? 'Usuário') . ' - Perfil') ?>;
 </script>
 
@@ -260,7 +201,6 @@ if ($currentUserId && !empty($levelsList)) {
 
     <div style="display:flex;flex-direction:column;align-items:center;gap:12px;width:100%">
 
-      <!-- avatar + name + follow/edit -->
       <div style="display:flex;align-items:center;gap:16px;width:100%;justify-content:center;">
         <div style="width:160px;height:160px;border-radius:12px;overflow:hidden;border:1px solid var(--border);background:var(--surface);box-shadow:var(--shadow);">
           <img src="<?= h($avatarUrl) ?>" alt="<?= h($user['nome']) ?> - avatar" style="width:100%;height:100%;object-fit:cover;display:block;">
@@ -296,24 +236,20 @@ if ($currentUserId && !empty($levelsList)) {
         </div>
       </div>
 
-      <!-- descrição: se for dono do perfil mostra editor -->
       <div style="width:100%;max-width:900px;">
         <div style="background:var(--surface);border:1px solid var(--border);padding:16px;border-radius:12px;box-shadow:var(--shadow);">
           <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;">
             <h2 style="margin:0 0 8px 0;font-size:1rem">Sobre</h2>
             <?php if ($currentUserId && $currentUserId === (int)$user['id']): ?>
-              <!-- botão de editar (ativa a textarea via JS) -->
               <button id="editDescBtn" class="btn" type="button" style="padding:6px 10px;border-radius:8px;">Editar</button>
             <?php endif; ?>
           </div>
 
-          <!-- view mode -->
           <div id="descView" style="margin-top:8px;color:var(--text);line-height:1.6;">
             <?= nl2br(h($user['descricao'] ?? '')) ?: '<span style="color:var(--muted)">Sem descrição ainda.</span>' ?>
           </div>
 
           <?php if ($currentUserId && $currentUserId === (int)$user['id']): ?>
-            <!-- edit mode -->
             <form id="descForm" method="post" style="margin-top:8px;display:none;">
               <input type="hidden" name="action" value="update_description">
               <input type="hidden" name="target_user_id" value="<?= $currentUserId ?>">
@@ -329,7 +265,6 @@ if ($currentUserId && !empty($levelsList)) {
 
     </div>
 
-    <!-- Levels list (cards iguais ao index, com preview + jogar + like) -->
     <div style="width:100%;max-width:1100px;">
       <h3 style="margin:0 0 12px 0">Níveis de <?= h($user['nome']) ?></h3>
 
@@ -338,9 +273,7 @@ if ($currentUserId && !empty($levelsList)) {
       <?php else: ?>
         <div class="levels-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:16px;">
           <?php foreach ($levelsList as $lvl):
-              $matrix = null;
-              $functions = [];
-              $cell_size = 18;
+              $matrix = null; $functions = []; $cell_size = 18;
               if (!empty($lvl['level_json'])) {
                   $level_json = json_decode($lvl['level_json'], true);
                   if (json_last_error() === JSON_ERROR_NONE) {
@@ -370,8 +303,7 @@ if ($currentUserId && !empty($levelsList)) {
                     for ($r = 0; $r < $rows; $r++) {
                         for ($c = 0; $c < $cols; $c++) {
                             $cellVal = $matrix[$r][$c] ?? null;
-                            $bg = '#fff';
-                            $text = '';
+                            $bg = '#fff'; $text = '';
                             if (is_array($cellVal)) {
                                 $bg = cell_bg_color($cellVal['color'] ?? '');
                                 $sym = $cellVal['symbol'] ?? '';
@@ -427,7 +359,6 @@ if ($currentUserId && !empty($levelsList)) {
                   <div style="margin-left:auto; display:flex; gap:8px; align-items:center;">
                     <div class="difficulty-badge" style="padding:6px 8px;border-radius:9999px;font-weight:700;font-size:0.85rem;color:#fff;background:<?= h($diff_color) ?>;"><?= h($lvl['difficulty'] ?: '—') ?></div>
 
-                    <!-- Form que envia o JSON do level via POST para view/level.php -->
                     <form method="post" action="<?= 'http://' . $_SERVER['HTTP_HOST'] . '/Projeto_Final_PHP/view/level.php' ?>" class="card-form" style="display:flex;margin:0;">
                       <input type="hidden" name="select_level" value="<?= $json_input_value ?>">
                       <button type="submit" class="open-btn" style="background: linear-gradient(180deg,#0b66b2,#0a58a3); color:#fff; padding:8px 12px; border-radius:8px; border:none; cursor:pointer;">Jogar</button>
@@ -446,7 +377,6 @@ if ($currentUserId && !empty($levelsList)) {
 </body>
 
 <script>
-  // JS simples para editar descrição inline
   (function(){
     const editBtn = document.getElementById('editDescBtn');
     if (!editBtn) return;

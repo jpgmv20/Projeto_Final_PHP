@@ -4,46 +4,59 @@
 
 require_once __DIR__ . '/config.php';
 
-// Helper: mesma função de header para normalizar avatar URL
+header('Content-Type: application/json; charset=utf-8');
+
+// helper local: gera avatar URL compatível com header.php avatar_url_web
 if (!function_exists('avatar_url_web')) {
-    function avatar_url_web(string $path = ''): string {
+    function avatar_url_web(string $user_or_path = ''): string {
         $default = 'image/images.jfif';
-        if (empty($path)) {
+
+        if ($user_or_path === '' || $user_or_path === null) {
             return 'http://' . $_SERVER['HTTP_HOST'] . '/Projeto_Final_PHP/' . $default;
         }
-        if (preg_match('#^https?://#i', $path)) {
-            return $path;
+
+        if (ctype_digit((string)$user_or_path)) {
+            $id = intval($user_or_path);
+            if ($id <= 0) {
+                return 'http://' . $_SERVER['HTTP_HOST'] . '/Projeto_Final_PHP/' . $default;
+            }
+            return 'http://' . $_SERVER['HTTP_HOST'] . '/Projeto_Final_PHP/controller/get_avatar.php?id=' . $id;
         }
-        $p = ltrim($path, '/');
+
+        if (preg_match('#^https?://#i', $user_or_path)) {
+            return $user_or_path;
+        }
+
+        $p = ltrim($user_or_path, '/');
         $p = preg_replace('#^(?:Projeto_Final_PHP/)+#i', '', $p);
-        return 'http://' . $_SERVER['HTTP_HOST'] . '/Projeto_Final_PHP/' . $p;
+
+        return 'http://' . $_SERVER['HTTP_HOST'] . '/Projeto_FINAL_PHP/' . $p;
     }
 }
 
-header('Content-Type: application/json; charset=utf-8');
-
 $q = trim((string)($_GET['q'] ?? ''));
 
-// resposta padrão
 $out = ['results' => []];
 
 if ($q === '') {
-    echo json_encode($out);
+    echo json_encode($out, JSON_UNESCAPED_UNICODE);
     exit;
 }
 
 $mysqli = connect_mysql();
 if (!$mysqli) {
-    echo json_encode($out);
+    echo json_encode($out, JSON_UNESCAPED_UNICODE);
     exit;
 }
 
-// buscamos até 5 perfis e 5 levels (separei para controlar limites)
 $like = '%' . $q . '%';
 $results = [];
 
-// 1) perfis (users) - pesquisa por nome ou email
-if ($stmt = $mysqli->prepare("SELECT id, nome, email, avatar_url FROM users WHERE nome LIKE ? OR email LIKE ? LIMIT 6")) {
+/* 1) Perfis (users) - pesquisa por nome ou email
+   Observação: retornamos avatar_url apontando para controller/get_avatar.php?id=USER_ID
+*/
+$userSql = "SELECT id, nome, email FROM users WHERE nome LIKE ? OR email LIKE ? LIMIT 6";
+if ($stmt = $mysqli->prepare($userSql)) {
     $stmt->bind_param("ss", $like, $like);
     $stmt->execute();
     $res = $stmt->get_result();
@@ -54,24 +67,23 @@ if ($stmt = $mysqli->prepare("SELECT id, nome, email, avatar_url FROM users WHER
             'title' => $row['nome'],
             'nome' => $row['nome'],
             'sub' => $row['email'],
-            'avatar_url' => avatar_url_web($row['avatar_url'] ?? '')
+            'avatar_url' => avatar_url_web((string)$row['id'])
         ];
     }
     $stmt->close();
 }
 
-// 2) levels - pesquisa por title (também por descricao)
-if ($stmt = $mysqli->prepare("SELECT id, title, descricao, level_json FROM levels WHERE title LIKE ? OR descricao LIKE ? LIMIT 6")) {
+/* 2) Levels - pesquisa por title/descricao */
+$levelSql = "SELECT id, title, descricao, level_json FROM levels WHERE title LIKE ? OR descricao LIKE ? LIMIT 6";
+if ($stmt = $mysqli->prepare($levelSql)) {
     $stmt->bind_param("ss", $like, $like);
     $stmt->execute();
     $res = $stmt->get_result();
     while ($row = $res->fetch_assoc()) {
-        // garantimos que level_json é string (se já é string, ok; se é JSON DB, pegamos string)
         $level_json_raw = $row['level_json'] ?? '';
         if (is_string($level_json_raw)) {
             $lvl_json_for_send = $level_json_raw;
         } else {
-            // fallback: encode array/object
             $lvl_json_for_send = json_encode($level_json_raw);
         }
         $results[] = [
@@ -79,7 +91,8 @@ if ($stmt = $mysqli->prepare("SELECT id, title, descricao, level_json FROM level
             'id' => (int)$row['id'],
             'title' => $row['title'],
             'sub' => mb_strimwidth($row['descricao'] ?? '', 0, 80, '...'),
-            'avatar_url' => avatar_url_web('image/images.jfif'), // use fallback image for levels
+            // usa avatar fallback para níveis (imagem padrão)
+            'avatar_url' => avatar_url_web(''),
             'level_json' => $lvl_json_for_send
         ];
     }
@@ -88,8 +101,6 @@ if ($stmt = $mysqli->prepare("SELECT id, title, descricao, level_json FROM level
 
 $mysqli->close();
 
-// opcional: ordenar (primeiro levels, depois users) — aqui manter a ordem obtida (users then levels).
 $out['results'] = $results;
-
 echo json_encode($out, JSON_UNESCAPED_UNICODE);
 exit;

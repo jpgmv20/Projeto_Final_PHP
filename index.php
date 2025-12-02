@@ -115,7 +115,7 @@ HTML;
 
 // ----------------- consulta de levels (igual ao seu código original) -----------------
 $sql = "SELECT l.id, l.author_id, l.title, l.descricao, l.difficulty, l.likes_count, l.plays_count, l.level_json, l.published, l.created_at,
-               u.nome AS author_name, u.avatar_url AS author_avatar
+               u.nome AS author_name
         FROM levels l
         LEFT JOIN users u ON u.id = l.author_id
         ORDER BY l.created_at DESC
@@ -192,12 +192,7 @@ $preview_cell = 18;
   <link rel="stylesheet" href="css/index.css" />
   <style>
     /* Estilos mínimos para os cards/preview (inline para facilitar) */
-    .levels-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(550px, 1fr));
-    gap: 16px;
-    margin-top: 18px;
-}
+    .levels-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(580px, 1fr)); gap: 16px; margin-top: 18px; }
     .level-card { background: var(--surface, #fff); border-radius: 12px; padding: 12px; box-shadow: var(--shadow, 0 6px 18px rgba(15,23,36,0.06)); display:flex; gap:12px; align-items:flex-start; }
     .level-card .meta { flex: 1; min-width:0; }
     .level-card .author { display:flex; gap:8px; align-items:center; margin-bottom:6px; }
@@ -264,19 +259,8 @@ $preview_cell = 18;
                 }
             }
 
-            // fallback avatar
-            $author_avatar = $lvl['author_avatar'] ?? '';
-            if (empty($author_avatar)) {
-                $avatar_src = '/Projeto_Final_PHP/image/images.jfif';
-            } else {
-                $path = ltrim($author_avatar, '/');
-                $path = preg_replace('#^(Projeto_Final_PHP/)+#i', 'Projeto_Final_PHP/', $path);
-                if (strpos($path, 'Projeto_Final_PHP/') === 0) {
-                    $avatar_src = '/' . $path;
-                } else {
-                    $avatar_src = '/Projeto_Final_PHP/' . $path;
-                }
-            }
+            // <-- AQUI: usamos get_avatar via avatar_url_web passando o author_id -->
+            $avatar_src = avatar_url_web($lvl['author_id']);
 
             // prepare JSON string to send via POST (escape for HTML attribute)
             $json_to_send = $lvl['level_json'] ?? json_encode([
@@ -293,9 +277,11 @@ $preview_cell = 18;
         ?>
           <article class="level-card" role="article" aria-labelledby="level-title-<?= (int)$lvl['id'] ?>">
             <div class="level-preview" aria-hidden="true">
-              <?php if (is_array($matrix) && count($matrix)):
+              <?php if (is_array($matrix) && count($matrix)): 
+                    // compute cols/rows
                     $rows = count($matrix);
                     $cols = max(array_map('count', $matrix));
+                    // limit preview cell size to fit in preview area
                     $maxPreview = 120; // px
                     $cell = max(8, min(28, floor($maxPreview / max($rows, $cols))));
                     echo '<div class="grid-preview" style="grid-template-columns: repeat(' . (int)$cols . ', ' . $cell . 'px);">';
@@ -311,6 +297,8 @@ $preview_cell = 18;
                                 elseif ($sym === 'play' || $sym === 'player') $text = '▶';
                                 else $text = ($sym && $sym !== 'none') ? h(substr($sym,0,1)) : '';
                             } elseif (is_string($cellVal) && $cellVal !== '') {
+                                // could be simple token like "red_star"
+                                // best-effort parsing:
                                 if (strpos($cellVal, 'star') !== false) $text = '★';
                             }
                             echo '<div class="cell" style="width:' . $cell . 'px;height:' . $cell . 'px;background:' . h($bg) . ';font-size:10px;display:flex;align-items:center;justify-content:center;">' . h($text) . '</div>';
@@ -340,7 +328,6 @@ $preview_cell = 18;
 
               <div class="meta-foot">
                 <div class="stats">
-                  <!-- Like form (toggle) -->
                   <form class="like-form" method="post" action="<?= h($_SERVER['REQUEST_URI']) ?>">
                     <input type="hidden" name="action" value="toggle_like">
                     <input type="hidden" name="level_id" value="<?= (int)$lvl['id'] ?>">
@@ -356,10 +343,8 @@ $preview_cell = 18;
                 <div style="margin-left:auto; display:flex; gap:8px; align-items:center;">
                   <div class="difficulty-badge" style="background: <?= h($diff_color) ?>;"><?= h($lvl['difficulty'] ?: '—') ?></div>
 
-                  <!-- Form que envia o JSON do level via POST para este mesmo arquivo (será processado e encaminhado para view/level.php) -->
-                  <form method="post" action="<?= h($_SERVER['REQUEST_URI']) ?>" class="card-form">
-                    <input type="hidden" name="action" value="open_level">
-                    <input type="hidden" name="level_id" value="<?= (int)$lvl['id'] ?>">
+                  <!-- Form que envia o JSON do level via POST para view/level.php -->
+                  <form method="post" action="<?= 'http://' . $_SERVER['HTTP_HOST'] . '/Projeto_Final_PHP/view/level.php' ?>" class="card-form">
                     <input type="hidden" name="select_level" value="<?= $json_input_value ?>">
                     <div class="card-right">
                       <button type="submit" class="open-btn">Abrir</button>
