@@ -362,12 +362,13 @@ CREATE PROCEDURE create_user (
     IN p_descricao VARCHAR(512),
     IN p_email VARCHAR(255),
     IN p_password VARCHAR(255),
-    IN p_avatar_url VARCHAR(1024),
+    IN p_image_type varchar(10),						  
+	  IN p_avatar_image LONGBLOB,
     IN p_config JSON
 )
 BEGIN
-    INSERT INTO users (nome, descricao, email, password, avatar_url, config)
-    VALUES (p_nome, p_descricao, p_email, p_password, p_avatar_url, p_config);
+    INSERT INTO users (nome, descricao, email, password, image_type, avatar_image, config)
+    VALUES (p_nome, p_descricao, p_email, p_password, p_image_type, p_avatar_image, p_config);
 END$$
 
 -- Seguir (insere relação follower -> user)
@@ -507,6 +508,7 @@ CALL create_user(
     'pedro@example.com',
     'senha123', 
     NULL,
+    NULL,
     JSON_OBJECT('tema', 'dark')
 );
 
@@ -515,6 +517,7 @@ CALL create_user(
     'Professor de Redes e Banco de dados, e é grande amigo da 2 info',
     'guedes@example.com',
     'senha123',
+    NULL,
     NULL,
     JSON_OBJECT('tema', 'dark')
 );
